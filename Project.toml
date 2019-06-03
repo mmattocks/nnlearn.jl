@@ -1,0 +1,10 @@
+name = "nnlearn"
+uuid = "14dc2310-85ca-11e9-0686-9f65464bceb7"
+authors = ["mmattocks <mike.mattocks@utoronto.ca>"]
+version = "0.1.0"
+
+[deps]
+BioSequences = "7e6ae17a-c86d-528c-b3b9-7f778a29fe59"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+MS_HMMBase = "f5650aa0-5f46-11e9-253e-a98edbbd51a5"
