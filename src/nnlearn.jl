@@ -8,6 +8,8 @@ module nnlearn
     using BGHMM, BioSequences, DataFrames, MS_HMMBase, ProgressMeter
     import Distributed: RemoteChannel
     import Distributions: Dirichlet, Categorical
+    import StatsFuns: logsumexp
+    import Random: rand
 
     function make_position_df(fasta_reader::BioSequences.FASTA.Reader)
         position_df = DataFrame(Sequence = DNASequence[], Scaffold = String[], Start = Int64[], End = Int64[], Smt = Float64[], Fuzziness = Float64[])
@@ -29,14 +31,8 @@ module nnlearn
         return coded_seqs, BGHMM_mask
     end
 
-    #sample a weight matrix of a given length from one dirichlet prior applying to each position (uninformative by default)
-    function sampleWM(length::Int, no_emission_symbols::Int=4, prior::Dirichlet=Dirichlet(ones(no_emission_symbols)/no_emission_symbols))
-        wm = zeros(length,no_emission_symbols)
-        for position in 1:length
-            wm[position,:] = rand(prior)
-        end
-        return wm
-    end
 
-    include("likelihood_functions.jl")
+
+    include("bghmm_likelihood.jl")
+    include("pwm.jl")
 end # module
