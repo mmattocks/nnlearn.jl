@@ -1,65 +1,71 @@
 #JOB FILEPATHS
-Sys.islinux() ? danio_gff_path = "/media/main/Bench/PhD/seq/GRCz11/Danio_rerio.GRCz11.94.gff3" : danio_gff_path = "F:\\PhD\\seq\\GRCz11\\Danio_rerio.GRCz11.94.gff3"
-Sys.islinux() ? selected_hmm_output = "/media/main/Bench/PhD/NGS_binaries/BGHMM/selected_BGHMMs" : selected_hmm_output = "F:\\PhD\\NGS_binaries\\BGHMM\\selected_BGHMMs"
-Sys.islinux() ? sib_seq_fasta = "/media/main/Bench/PhD/git/nnlearn/rys_nuc_project/sib_nuc_position_sequences.fa" : sib_seq_fasta = "F:\\PhD\\git\\nnlearn\\rys_nuc_project\\sib_nuc_position_sequences.fa"
-
-Sys.islinux() ? danio_genome_path = "/media/main/Bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna" : danio_genome_path = "F:\\PhD\\seq\\GRCz11\\GCA_000002035.4_GRCz11_genomic.fna"
-Sys.islinux() ? danio_gen_index_path = "/media/main/Bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna.fai" : danio_gen_index_path = "F:\\PhD\\seq\\GRCz11\\GCA_000002035.4_GRCz11_genomic.fna.fai"
-
+Sys.islinux() ? code_binary = "/media/main/Bench/PhD/NGS_binaries/nnlearn/coded_obs_set" : code_binary = "F:\\PhD\\NGS_binaries\\nnlearn\\coded_obs_set"
+Sys.islinux() ? matrix_output = "/media/main/Bench/PhD/NGS_binaries/nnlearn/BGHMM_sib_matrix" : matrix_output = "F:\\PhD\\NGS_binaries\\nnlearn\\BGHMM_sib_matrix"
+Sys.islinux() ? ensemble_directory = "/media/main/Bench/PhD/NGS_binaries/nnlearn/sib_ensemble/" : ensemble_directory = "F:\\PhD\\NGS_binaries\\nnlearn\\sib_ensemble\\"
+!ispath(ensemble_directory) && mkpath(ensemble_directory)
+Sys.islinux() ? converged_sample = "/media/main/Bench/PhD/NGS_binaries/nnlearn/converged_sample" : converged_sample = "F:\\PhD\\NGS_binaries\\nnlearn\\converged_sample"
 
 @info "Loading master libraries..."
-using Distributed, Serialization, ProgressMeter
+using Distributed, Serialization, ProgressMeter, Distributions
 
 #JOB CONSTANTS
 const BGHMM_lhs= RemoteChannel(()->Channel{Tuple}(30)) #channel to take partitioned BGHMM subsequence likelihoods from
 const position_size = 141
-const ensemble_size = 300
-const no_sources = 100
+const ensemble_size = 100
+const no_sources = 10
 const source_min_bases = 3
 const source_max_bases = position_size
-const mixing_prior = 0.15
+@assert source_min_bases < source_max_bases
+const source_length_range = source_min_bases:source_max_bases
+const mixing_prior = 0.05
+@assert mixing_prior >= 0 && mixing_prior <= 1
+const jobs_chan= RemoteChannel(()->Channel{Tuple}(Inf)) #channel to hold scoring/llh jobs
+const results_chan= RemoteChannel(()->Channel{Tuple}(Inf)) #channel to take scores off of
 
 # #DISTRIBUTED CLUSTER CONSTANTS
 # const remote_machine = "10.0.0.12"
-const no_local_processes = 1
-const no_remote_processes = 0
+# const no_local_processes = 12
+# const no_remote_processes = 0
 # #SETUP DISTRIBUTED METAMOTIF LEARNERS
-@info "Spawning workers..."
-addprocs(no_local_processes, topology=:master_worker)
-# #addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker)
-pool_size = no_remote_processes + no_local_processes
-worker_pool = [i for i in 2:pool_size+1]
+# @info "Spawning workers..."
+# addprocs(no_local_processes, topology=:master_worker)
+# # addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker)
+# pool_size = no_remote_processes + no_local_processes
+# worker_pool = [i for i in 2:pool_size+1]
+# const dist_params = (true, jobs_chan, results_chan)
 
 @info "Loading worker libraries everywhere..."
-@everywhere using BGHMM, BioSequences, nnlearn, Revise
+@everywhere using nnlearn
 
-@info "Constructing position dataframe from file at $sib_seq_fasta..."
-sib_position_df = nnlearn.make_padded_df(sib_seq_fasta, danio_gff_path, danio_genome_path, danio_gen_index_path, source_max_bases-1)
-#sib_position_df = sib_position_df[1:100, :]
+# for worker in worker_pool
+#     remote_do(nnlearn.IPM_likelihood_worker, worker, jobs_chan, results_chan)
+# end
 
-@info "Masking positions by genome partition and strand, then formatting observations..."
-BGHMM.add_partition_masks!(sib_position_df, danio_gff_path)
+@info "Loading BGHMM likelihood matrix binary..."
+BGHMM_lh_matrix = deserialize(matrix_output)
 
-@info "Setting up for BGHMM likelihood calculations..."
-BGHMM_dict = deserialize(selected_hmm_output)
-BGHMM_likelihood_queue, jobcount, lh_matrix_size = nnlearn.queue_BGHMM_likelihood_calcs(sib_position_df, BGHMM_dict)
+#BGHMM_lh_matrix = BGHMM_lh_matrix[:,1:200]
 
-@info "Distributing BGHMM likelihood jobs to workers..."
-for worker in worker_pool
-    remote_do(nnlearn.process_BGHMM_likelihood_queue!, worker, BGHMM_likelihood_queue, BGHMM_lhs, BGHMM_dict)
-end
+@info "Loading coded observation set and offsets..."
+(coded_seqs, offsets) = deserialize(code_binary)
 
-BGHMM_lh_matrix = zeros(lh_matrix_size) #T, Strand, O
-@showprogress 1 "Overall batch progress:" 1 for job in jobcount:-1:1
-    @debug "$job lh jobs remaining"
-    wait(BGHMM_lhs)
-    jobid, frag_lhs = take!(BGHMM_lhs)
-    (offset, frag_start, o, partition, strand) = jobid
-    if strand == -1
-        frag_lhs = reverse(frag_lhs)
-    end #positive, unstranded frags  are inserted as-is
-    BGHMM_lh_matrix[offset+frag_start:offset+frag_start+length(frag_lhs)-1,o] = frag_lhs
-end
+#coded_seqs = coded_seqs[:,1:200]
+#offsets = offsets[1:200]
 
-# @info "Initialising ICA PWM model ensemble for nested sampling..."
-# ensemble = nnlearn.init_model_ensemble(ensemble_size, no_sources,mixing_prior,size(coded_obs_set)[2],uninformative_range=source_size_range)
+@info "Assembling source priors..."
+source_priors = nnlearn.assemble_source_priors(no_sources, [], source_length_range)
+
+@info "Initialising ICA PWM model ensemble for nested sampling..."
+ensemble = nnlearn.Bayes_IPM_ensemble(ensemble_directory, ensemble_size, source_priors, mixing_prior, BGHMM_lh_matrix, coded_seqs, position_size, offsets, source_length_range)
+
+ultralight_even_perm = (10, ones(3)/3, Uniform(.00001,.01))
+light_even_perm = (300, ones(3)/3, Uniform(.00001,.01))
+med_even_perm = (900, ones(3)/3, Uniform(.0001,.03))
+heavy_even_perm = (3000, ones(3)/3, Uniform(.001,.05))
+
+permute_params = [(ultralight_even_perm,3), (light_even_perm, 3), (med_even_perm, 3), (heavy_even_perm, 3)]
+models_to_permute = ensemble_size
+
+serialize(converged_sample, nnlearn.nested_sample_posterior_to_convergence!(ensemble, permute_params, models_to_permute))
+
+@info "Job done!"
