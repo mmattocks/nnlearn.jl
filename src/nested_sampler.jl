@@ -17,7 +17,7 @@ function nested_step!(e::Bayes_IPM_ensemble, perm_params::Vector{Tuple{Tuple{Int
     #SELECT NEW MODEL, SAVE TO ENSEMBLE DIRECTORY, CREATE RECORD AND PUSH TO ENSEMBLE
     @info "Permuting..."
     distributed ? new_model = run_permutation_routine(e, perm_params, models_to_permute, ll_contour, jobs_chan, results_chan) : new_model = run_permutation_routine(e, perm_params, models_to_permute, ll_contour)
-    new_model == nothing ? (@error "Failure to find new model in current likelihood contour $ll_contour, iterate $j, prior to convergence"; return 1) : new_model_record = Model_Record(string(e.ensemble_directory,new_model.name), new_model.log_likelihood)
+    new_model === nothing ? (@error "Failure to find new model in current likelihood contour $ll_contour, iterate $j, prior to convergence"; return 1) : new_model_record = Model_Record(string(e.ensemble_directory,new_model.name), new_model.log_likelihood)
     push!(e.models, new_model_record)
     serialize(new_model_record.path, new_model)
     e.model_counter +=1

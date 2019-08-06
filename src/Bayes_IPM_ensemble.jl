@@ -32,7 +32,7 @@ end
 Bayes_IPM_ensemble(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::Matrix{Float64}, obs::Array{Int64}, position_size::Int64, rel_starts::Vector{Int64}, source_length_ranges; posterior_switch::Bool=true) =
 Bayes_IPM_ensemble(
     ensemble_directory,
-    assemble_IPMs(ensemble_directory, no_models, source_priors, mix_prior, view(bg_scores,:,:), view(obs,:,:), position_size, rel_starts, source_length_ranges),
+    assemble_IPMs(ensemble_directory, no_models, source_priors, mix_prior, bg_scores, obs, position_size, rel_starts, source_length_ranges),
    [-Inf], #L0 = 0
    [0], #ie exp(0) = all of the prior is covered
    [-Inf], #w0 = 0
@@ -55,6 +55,7 @@ function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_prio
         serialize(string(ensemble_directory,model_no), model) #save the model to the ensemble directory
         push!(ensemble_records, Model_Record(string(ensemble_directory,model_no),model.log_likelihood))
     end
+
     return ensemble_records
 end
 
@@ -93,22 +94,6 @@ function assemble_IPMs(ensemble_directory::String, jobs_chan::RemoteChannel, res
     return ensemble_records #file the model records in the ensemble struct
 end
 
-function ICA_PWM_worker(jobs_chan::RemoteChannel, results_chan::RemoteChannel)
-    while true
-        wait(jobs_chan)
-        instruction = fetch(jobs_chan)
-        if typeof(instruction[1]) <: Bayes_IPM_ensemble
-            model = run_permutation_routine(instruction)
-            model != nothing ? put!(results_chan, model) : 
-                (put!(results_chan, "TIMEOUT"); @error "Failure to find new model in current likelihood contour $(instruction[1].log_Li), iterate $(length(instruction[1].log_Li)), prior to convergence, worker $(myid())")
-        elseif instruction[1] == "init"
-            put!(results_chan, ICA_PWM_model(instruction[2]...))
-        else
-            @error "Malformed ICA_PWM_worker job instruction, worker $(myid()), instruction $instruction"
-        end
-    end
-end
-
 #permutation routine function- 
 #general logic: receive array of permutation parameters. 
 #until a model more likely than the least is found:
@@ -117,7 +102,7 @@ end
 
 #((moves, move_sizes, PWM_shift_range), times_to_apply) for params
 function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{Tuple{Int64,Vector{Float64},Distributions.Uniform{Float64}},Int64}}, models_to_permute::Int64, contour::Float64)
-    @showprogress 2 "Permuting model $i to find candidate inside contour $contour:" for i = 1:models_to_permute
+    @showprogress 2 "Permuting models, search contour $contour: " for i = 1:models_to_permute
         m_record = rand(e.models)
         m = deserialize(m_record.path)
         for (params, attempts) in param_set
