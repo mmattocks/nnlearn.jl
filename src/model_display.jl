@@ -1,3 +1,5 @@
+#THIS CODE BASED ON N. REDDY'S THICWEED.JL DISPLAY SCRIPT
+
 #CONSTANTS
 # each tuple specifies the x, y, fontsize, xscale to print the character
 # in a 100x100 box at position 100,100.

@@ -7,7 +7,7 @@ using Serialization,nnlearn
 sib_position_df = deserialize(position_df_binary)
 
 @info "Setting up observations..."
-coded_seqs, offsets = nnlearn.observation_setup(sib_position_df, position_size)
+coded_seqs, offsets = nnlearn.observation_setup(sib_position_df)
 
 @info "Serializing coded observation set and sequence offsets..."
 serialize(code_binary,(coded_seqs,offsets))
