@@ -9,9 +9,9 @@ module nnlearn
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
     import Random: rand
 
-    mutable struct Model_Record #record struct to associate a log_Li tuple with a saved, calculated model
+    mutable struct Model_Record #record struct to associate a log_Li with a saved, calculated model
         path::String
-        log_Li::Tuple{Float64, Float64}
+        log_Li::Float64
     end
 
     function observation_setup(position_df::DataFrame, pad::Int64)
@@ -22,6 +22,7 @@ module nnlearn
         return coded_seqs, position_df.SeqOffset
     end
 
+    #wm_samples are in decimal probability space, not log space
     function assemble_source_priors(no_sources::Int64, wm_samples::Vector{Matrix{Float64}}, prior_wt::Float64, uninform_length_range::UnitRange{Int64}, unspecified_wm_prior=Dirichlet(ones(4)/4)) #estimate a dirichlet prior on wm_samples inputs; unless otherwise specified, fill non-wm_samples-specified priors with uninformative priors of random lengths in the specified range
         source_priors = Vector{Vector{Dirichlet{Float64}}}()
         for source in 1:no_sources

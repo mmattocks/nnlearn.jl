@@ -1,10 +1,8 @@
 #### IMPLEMENTATION OF JEFF SKILLINGS' NESTED SAMPLING ALGORITHM, VERY ROUGHLY FOLLOWING THOMAS DOWNS' NMICA ####
-function nested_step!(e::Bayes_IPM_ensemble, perm_params::Vector{Tuple{Tuple{Int64,Vector{Float64},Distributions.Uniform{Float64}},Int64}},models_to_permute::Int64, dist_params::Tuple=(false, nothing, nothing))
-    distributed, jobs_chan, results_chan = dist_params
-
-    N=length(e.models) #number of sample models/particles on the posterior surface
-    j = length(e.log_Li) #iterate number, index for last values
-    k = j+1 #index for newly pushed values
+function nested_step!(e::Bayes_IPM_ensemble, perm_params::Vector{Tuple{String,Any}},models_to_permute::Int64)
+    N = length(e.models) #number of sample models/particles on the posterior surface
+    i = length(e.log_Li) #iterate number, index for last values
+    j = i+1 #index for newly pushed values
 
     #REMOVE OLD LEAST LIKELY MODEL
     ll_contour, least_likely_idx = findmin([model.log_Li for model in e.models])
@@ -16,24 +14,24 @@ function nested_step!(e::Bayes_IPM_ensemble, perm_params::Vector{Tuple{Tuple{Int
 
     #SELECT NEW MODEL, SAVE TO ENSEMBLE DIRECTORY, CREATE RECORD AND PUSH TO ENSEMBLE
     @info "Permuting..."
-    distributed ? new_model = run_permutation_routine(e, perm_params, models_to_permute, ll_contour, jobs_chan, results_chan) : new_model = run_permutation_routine(e, perm_params, models_to_permute, ll_contour)
-    new_model === nothing ? (@error "Failure to find new model in current likelihood contour $ll_contour, iterate $j, prior to reaching convergence criterion"; return 1) : new_model_record = Model_Record(string(e.ensemble_directory,new_model.name), new_model.log_likelihood)
+    new_model = run_permutation_routine(e, perm_params, models_to_permute, ll_contour)
+    new_model === nothing ? (@error "Failure to find new model in current likelihood contour $ll_contour, iterate $i, prior to reaching convergence criterion"; return 1) : new_model_record = Model_Record(string(e.ensemble_directory,new_model.name), new_model.log_likelihood)
     push!(e.models, new_model_record)
     serialize(new_model_record.path, new_model)
     e.model_counter +=1
--
+
     #UPDATE ENSEMBLE QUANTITIES   
     push!(e.log_Li, minimum([model.log_Li for model in e.models])) #log likelihood of the least likely model - the current ensemble ll contour at Xi
-    push!(e.log_Xi, -j/N) #log Xi - crude estimate of the iterate's enclosed prior mass
-    push!(e.log_wi, log(exp(e.log_Xi[j]) - exp(e.log_Xi[k]))) #log width of prior mass spanned by the last step
-    push!(e.log_Liwi, MS_HMMBase.log_prob_sum(e.log_Li[k],e.log_wi[k])) #log likelihood + log width = increment of evidence spanned by iterate
-    push!(e.log_Zi, logaddexp(e.log_Zi[j],e.log_Liwi[k]))    #log evidence
+    push!(e.log_Xi, -i/N) #log Xi - crude estimate of the iterate's enclosed prior mass
+    push!(e.log_wi, log(exp(e.log_Xi[i]) - exp(e.log_Xi[j]))) #log width of prior mass spanned by the last step
+    push!(e.log_Liwi, MS_HMMBase.log_prob_sum(e.log_Li[j],e.log_wi[j])) #log likelihood + log width = increment of evidence spanned by iterate
+    push!(e.log_Zi, logaddexp(e.log_Zi[i],e.log_Liwi[j]))    #log evidence
 
     #information- dimensionless quantity
     push!(e.Hi, MS_HMMBase.log_prob_sum(
-            (exp(MS_HMMBase.log_prob_sum(e.log_Liwi[k],-e.log_Zi[k])) * e.log_Li[k]), #term1
-            (exp(MS_HMMBase.log_prob_sum(e.log_Zi[j],-e.log_Zi[k])) * MS_HMMBase.log_prob_sum(e.Hi[j],e.log_Zi[j])), #term2
-            -e.log_Zi[k])) #term3
+            (exp(MS_HMMBase.log_prob_sum(e.log_Liwi[j],-e.log_Zi[j])) * e.log_Li[j]), #term1
+            (exp(MS_HMMBase.log_prob_sum(e.log_Zi[i],-e.log_Zi[j])) * MS_HMMBase.log_prob_sum(e.Hi[i],e.log_Zi[i])), #term2
+            -e.log_Zi[j])) #term3
 
     return 0
 end
@@ -50,7 +48,7 @@ function nested_sample_posterior_to_convergence!(e::Bayes_IPM_ensemble, permute_
         iterate = length(e.log_Li) #get the iterate from the enemble 
         warn = nested_step!(e, permute_params, permute_limit) #step the ensemble
         warn == 1 && #"1" passed for warn code means nested_step failed to find permutation inside llh contour
-                return e #if there is a warning, just return the ensemble
+                return e #if there is a warning, iust return the ensemble
         verbose && @info "Iterate: $iterate, contour: $(e.log_Li[end]), log_Xi:$(e.log_Xi[end]), log_wt:$(e.log_wi[end]) log_liwi:$(e.log_Liwi[end]), log_Z:$(e.log_Zi[end]), H:$(e.Hi[end])"
         iterate += 1
     end
@@ -59,5 +57,5 @@ function nested_sample_posterior_to_convergence!(e::Bayes_IPM_ensemble, permute_
 
     @info "Job done, sampled to convergence. Final logZ $final_logZ"
 
-    return e
+    return final_logZ
 end

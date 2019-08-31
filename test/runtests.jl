@@ -1,6 +1,7 @@
-using nnlearn, BGHMM, MS_HMMBase, BioSequences, Distributions, Test
+using nnlearn, BGHMM, MS_HMMBase, BioSequences, Distributions, Random, Serialization, Test
 import StatsFuns: logsumexp
 
+Random.seed!(1)
 O=1000;S=50
 
 @testset "PWM source prior setup, PWM source initialisation and manipulation functions" begin
@@ -155,18 +156,118 @@ end
     obs_cardinality = length(obs_source_indices)
     cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality))
 
-    @test nnlearn.weave_scores(o, bg_scores, score_mat, obs_source_indices, position_start, obs_source_bitindex, source_wmls, log_motif_expectation, cardinality_penalty) == -26.821656935021238
+    lh_target = -26.821656935021238
 
-    o1_lh = nnlearn.weave_scores(1, bg_scores, score_mat, findall(mix_matrix[1,:]), position_start, source_bitindex[:,mix_matrix[1,:],1], source_wmls, log_motif_expectation, cardinality_penalty)
-    o2_lh = nnlearn.weave_scores(2, bg_scores, score_mat, findall(mix_matrix[2,:]), position_start, source_bitindex[:,mix_matrix[2,:],2], source_wmls, log_motif_expectation, cardinality_penalty)
+    @test nnlearn.weave_scores(o, bg_scores, score_mat, obs_source_indices, obs_source_bitindex, source_wmls, log_motif_expectation, cardinality_penalty, position_start) == lh_target
 
-    @test nnlearn.IPM_likelihood(sources, score_mat, source_bitindex, bg_scores, mix_matrix, source_wmls) == MS_HMMBase.log_prob_sum(o1_lh,o2_lh)
+    o1_lh = nnlearn.weave_scores(1, bg_scores, score_mat, findall(mix_matrix[1,:]), source_bitindex[:,mix_matrix[1,:],1], source_wmls, log_motif_expectation, cardinality_penalty, position_start)
+    o2_lh = nnlearn.weave_scores(2, bg_scores, score_mat, findall(mix_matrix[2,:]), source_bitindex[:,mix_matrix[2,:],2], source_wmls, log_motif_expectation, cardinality_penalty, position_start)
+
+    @test nnlearn.IPM_likelihood(sources, score_mat, source_bitindex, bg_scores, mix_matrix, source_wmls, position_start) == MS_HMMBase.log_prob_sum(o1_lh,o2_lh)
 end
 
 @testset "Full model functions" begin
+    source_pwm = [.7 .1 .1 .1
+    .1 .1 .1 .7
+    .1 .1 .7 .1]
 
+    source_pwm_2 = [.6 .1 .1 .2
+    .2 .1 .1 .6
+    .1 .2 .6 .1]
+
+    src_length_limits=2:3
+
+    source_priors = nnlearn.assemble_source_priors(3, [source_pwm, source_pwm_2], 4.0, src_length_limits)
+    mix_prior=.75
+
+    bg_scores = log.(fill(.5, (12,2)))
+    obs=[BioSequences.DNASequence("ATGATGATGATG")
+    BioSequences.DNASequence("TGATGATGATGA")]
+    order_seqs = BGHMM.get_order_n_seqs(obs, 0)
+    coded_seqs = BGHMM.code_seqs(order_seqs)
+    position_start=1;offsets=[0,0]
+
+    test_model = nnlearn.ICA_PWM_model("test", source_priors, mix_prior, bg_scores, coded_seqs, position_start, offsets, src_length_limits)
+    
+    sources_target::Vector{Tuple{Matrix{Float64},Int64}} = [([-3.71415 -5.82712 -2.38886 -0.126762; -0.834566 -2.06535 -0.852383 -4.361], 2), ([-0.846903 -1.70222 -1.18194 -2.49741; -1.1486 -2.79613 -1.3878 -0.988191; -6.14759 -3.3357 -0.218022 -1.84412], 1), ([-8.17558 -0.0620875 -3.19203 -3.97233; -3.47489 -3.52956 -1.42089 -0.359224], 1)]
+    mix_target = trues(2,3)
+    lh_target = -58.01626261977499
+
+    for (s, source) in enumerate(test_model.sources)
+        @test isapprox(source[1], sources_target[s][1], atol=9.0e-6)
+    end
+    @test test_model.mixing_matrix == mix_target
+    @test test_model.log_likelihood == lh_target
+
+    permuted_model = deepcopy(test_model)
+    nnlearn.permute_model!(permuted_model, 1, lh_target, coded_seqs, position_start, bg_scores, offsets, source_priors, 5, 18)
+    @test permuted_model.log_likelihood > test_model.log_likelihood
+
+    reinit_model = deepcopy(test_model)
+    nnlearn.reinit_sources!(reinit_model, 1, lh_target, coded_seqs, position_start, bg_scores, offsets, source_priors, mix_prior, 500)
+    @test reinit_model.log_likelihood > test_model.log_likelihood
+
+    uninform_priors = nnlearn.assemble_source_priors(3, Vector{Matrix{Float64}}(), 4.0, src_length_limits)
+    ui_model = nnlearn.ICA_PWM_model("ui", uninform_priors, mix_prior, bg_scores, coded_seqs, position_start, offsets, src_length_limits)
+    merge_target = ui_model.log_likelihood
+
+    path=randstring()
+    test_record = nnlearn.Model_Record(path, test_model.log_likelihood)
+    serialize(path,test_model)
+
+    nnlearn.merge_model!([test_record],ui_model,1,merge_target,coded_seqs,position_start,bg_scores,offsets,500)
+
+    @test ui_model.log_likelihood > merge_target
 end
 
 @testset "Ensemble assembly and nested sampling functions" begin
+    ensembledir = randstring()
 
+    source_pwm = [.7 .1 .1 .1
+    .1 .1 .1 .7
+    .1 .1 .7 .1]
+
+    source_pwm_2 = [.6 .1 .1 .2
+    .2 .1 .1 .6
+    .1 .2 .6 .1]
+
+    src_length_limits=2:3
+
+    source_priors = nnlearn.assemble_source_priors(3, [source_pwm, source_pwm_2], 4.0, src_length_limits)
+    mix_prior=.75
+
+    bg_scores = log.(fill(.5, (12,2)))
+    obs=[BioSequences.DNASequence("ATGATGATGATG")
+    BioSequences.DNASequence("TGATGATGATGA")]
+    order_seqs = BGHMM.get_order_n_seqs(obs, 0)
+    coded_seqs = BGHMM.code_seqs(order_seqs)
+    position_start=1;offsets=[0,0]
+
+    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 10, source_priors, mix_prior, bg_scores, coded_seqs, position_start, offsets, src_length_limits)
+
+    @test length(ensemble.models) == 10
+    for model in ensemble.models
+        @test -75 < model.log_Li < -40
+    end
+
+    models_to_permute = 60
+
+    perm_params = [("permute",(500,9)),("merge",(500)),("init",(500))]
+    new_model = nnlearn.run_permutation_routine(ensemble,perm_params,models_to_permute,-40.0)
+    @test new_model.log_likelihood > -40.0
+
+    nnlearn.nested_step!(ensemble, perm_params, models_to_permute)
+    @test length(ensemble.models) == 10
+    @test length(ensemble.log_Li) == 2
+    @test ensemble.log_Li[1] < ensemble.log_Li[2]
+    @test length(ensemble.log_Xi) == 2
+    @test length(ensemble.log_wi) == 2
+    @test length(ensemble.log_Liwi) == 2
+    @test length(ensemble.log_Zi) == 2
+    @test ensemble.log_Zi[1] < ensemble.log_Zi[2]
+    @test length(ensemble.Hi) == 2
+    @test length(ensemble.retained_posterior_samples) == 1
+    @test ensemble.model_counter==12
+
+    final_logZ = nnlearn.nested_sample_posterior_to_convergence!(ensemble, perm_params, models_to_permute)
 end
