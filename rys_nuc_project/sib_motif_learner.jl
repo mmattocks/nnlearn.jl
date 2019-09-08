@@ -6,7 +6,7 @@ Sys.islinux() ? ensemble_directory = "/media/main/Bench/PhD/NGS_binaries/nnlearn
 Sys.islinux() ? converged_sample = "/media/main/Bench/PhD/NGS_binaries/nnlearn/converged_sample" : converged_sample = "F:\\PhD\\NGS_binaries\\nnlearn\\converged_sample"
 
 @info "Loading libraries..."
-using Distributed, Distributions, nnlearn, ProgressMeter, Serialization
+using Distributions, nnlearn, ProgressMeter, Serialization
 
 #JOB CONSTANTS
 const position_size = 141
