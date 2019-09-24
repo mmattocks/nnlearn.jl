@@ -24,13 +24,13 @@ const mixing_prior = no_sources/1000
 BGHMM_lh_matrix = deserialize(matrix_output)
 #4.75GB
 @info "Loading coded observation set and offsets..."
-(coded_seqs, offsets) = deserialize(code_binary)
+coded_seqs = deserialize(code_binary)
 #8.30GB
 @info "Assembling source priors..."
 source_priors = nnlearn.assemble_source_priors(no_sources, [], source_length_range)
 #8.31GB
 @info "Initialising ICA PWM model ensemble for nested sampling..."
-ensemble = nnlearn.Bayes_IPM_ensemble(ensemble_directory, ensemble_size, source_priors, mixing_prior, BGHMM_lh_matrix, coded_seqs, position_size, offsets, source_length_range)
+ensemble = nnlearn.Bayes_IPM_ensemble(ensemble_directory, ensemble_size, source_priors, mixing_prior, BGHMM_lh_matrix, coded_seqs, position_size, source_length_range)
 
 ultralight_even_perm = (10, ones(3)/3, Uniform(.00001,.01))
 light_even_perm = (300, ones(3)/3, Uniform(.00001,.01))

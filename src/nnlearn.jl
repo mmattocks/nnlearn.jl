@@ -14,12 +14,34 @@ module nnlearn
         log_Li::Float64
     end
 
-    function observation_setup(position_df::DataFrame, pad::Int64)
-        offsets = position_df.SeqOffset
-        order_seqs = BGHMM.get_order_n_seqs(position_df.PadSeq, 0)
-        coded_seqs = BGHMM.code_seqs(order_seqs, position_df.SeqOffset)
+    function make_position_df(position_fasta::String)
+        position_reader = BioSequences.FASTA.Reader(open((position_fasta),"r"))
+        position_df = DataFrame(SeqID = String[], Start=Int64[], End=Int64[], Seq = DNASequence[])
+    
+        for entry in position_reader
+            scaffold = BioSequences.FASTA.identifier(entry)
+    
+            if scaffold != "MT"
+                desc_array = split(BioSequences.FASTA.description(entry))
+                pos_start = parse(Int64, desc_array[2])
+                pos_end = parse(Int64, desc_array[4])
+                seq = BioSequences.FASTA.sequence(entry)
+    
+                if !hasambiguity(padded_seq)
+                    push!(position_df, [scaffold, pos_start, pos_end, seq])
+                end
+            end
+        end
+        
+        close(position_reader)
+        return position_df
+    end
 
-        return coded_seqs, position_df.SeqOffset
+    function observation_setup(position_df::DataFrame; order::Int64=0)
+        order_seqs = BGHMM.get_order_n_seqs(position_df.Seq, order)
+        coded_seqs = BGHMM.code_seqs(order_seqs)
+
+        return coded_seqs
     end
 
     #wm_samples are in decimal probability space, not log space

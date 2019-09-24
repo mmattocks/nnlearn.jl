@@ -1,13 +1,16 @@
-Sys.islinux() ? position_df_binary = "/media/main/Bench/PhD/NGS_binaries/nnlearn/BGHMM_sib_positions" : position_df_binary = "F:\\PhD\\NGS_binaries\\nnlearn\\BGHMM_sib_positions"
-Sys.islinux() ? code_binary = "/media/main/Bench/PhD/NGS_binaries/nnlearn/coded_obs_set" : code_binary = "F:\\PhD\\NGS_binaries\\nnlearn\\coded_obs_set"
+sib_seq_fasta = "/media/main/Bench/PhD/git/nnlearn/rys_nuc_project/sib_nuc_position_sequences.fa"
+position_df_binary = "/media/main/Bench/PhD/NGS_binaries/nnlearn/BGHMM_sib_positions"
+code_binary = "/media/main/Bench/PhD/NGS_binaries/nnlearn/coded_obs_set"
 
 using Serialization,nnlearn
+@info "Constructing position dataframe from file at $sib_seq_fasta..."
+sib_position_df = nnlearn.make_position_df(sib_seq_fasta)
 
-@info "Loading position binary..."
-sib_position_df = deserialize(position_df_binary)
+@info "Saving position dataframe binary..."
+serialize(position_df_binary,sib_position_df)
 
 @info "Setting up observations..."
-coded_seqs, offsets = nnlearn.observation_setup(sib_position_df)
+obs_matrix = nnlearn.observation_setup(sib_position_df)
 
 @info "Serializing coded observation set and sequence offsets..."
-serialize(code_binary,(coded_seqs,offsets))
+serialize(code_binary,(obs_matrix,offsets))
