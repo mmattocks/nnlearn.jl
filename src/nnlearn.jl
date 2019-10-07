@@ -5,7 +5,7 @@ Functions to learn a metamotif model of nucleosome positions by nested sampling
 """
 
 module nnlearn
-    using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributions, MS_HMMBase, ProgressMeter, Serialization
+    using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributions, CLHMM, HMMBase, ProgressMeter, Serialization
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
     import Random: rand
 
@@ -63,7 +63,7 @@ module nnlearn
 
                 function estimate_dirichlet_prior_on_wm(wm::Matrix{Float64}, wt::Float64)
                     for i in 1:size(wm)[1]
-                        @assert MS_HMMBase.isprobvec(wm[i,:])
+                        @assert HMMBase.isprobvec(wm[i,:])
                     end
                     prior = Vector{Dirichlet{Float64}}()
                     for position in 1:size(wm)[1]

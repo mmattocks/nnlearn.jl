@@ -1,13 +1,13 @@
 #JOB FILEPATHS
-danio_gff_path = "/media/main/Bench/PhD/seq/GRCz11/Danio_rerio.GRCz11.94.gff3"
-danio_genome_path = "/media/main/Bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna"
-danio_gen_index_path = "/media/main/Bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna.fai"
+danio_gff_path = "/bench/PhD/seq/GRCz11/Danio_rerio.GRCz11.94.gff3"
+danio_genome_path = "/bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna"
+danio_gen_index_path = "/bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna.fai"
 
-selected_hmm_output = "/media/main/Bench/PhD/NGS_binaries/BGHMM/selected_BGHMMs"
+selected_hmm_output = "/bench/PhD/NGS_binaries/BGHMM/selected_BGHMMs"
 
-position_df_binary = "/media/main/Bench/PhD/NGS_binaries/nnlearn/BGHMM_sib_positions"
+position_df_binary = "/bench/PhD/NGS_binaries/nnlearn/BGHMM_sib_positions"
 
-matrix_output = "/media/main/Bench/PhD/NGS_binaries/nnlearn/BGHMM_sib_matrix"
+matrix_output = "/bench/PhD/NGS_binaries/nnlearn/BGHMM_sib_matrix"
 
 @info "Loading master libraries..."
 using BGHMM, nnlearn, Serialization, ProgressMeter, Distributions

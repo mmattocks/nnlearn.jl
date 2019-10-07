@@ -10,6 +10,7 @@ mutable struct Bayes_IPM_ensemble
 	Hi::Vector{Float64} #ensemble information
 
 	obs_array::Matrix{Int64} #observations
+	obs_lengths::Vector{Int64}
 
 	source_priors::Vector{Vector{Dirichlet{Float64}}} #source pwm priors
 	mix_prior::Float64 #prior on %age of observations that any given source contributes to
@@ -23,10 +24,10 @@ mutable struct Bayes_IPM_ensemble
 end
 
 ####Bayes_IPM_ensemble FUNCTIONS
-Bayes_IPM_ensemble(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::Matrix{Float64}, obs::Array{Int64}, position_start::Int64, source_length_limits; posterior_switch::Bool=true) =
+Bayes_IPM_ensemble(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::Matrix{Float64}, obs::Array{Int64}, source_length_limits; posterior_switch::Bool=true) =
 Bayes_IPM_ensemble(
 	ensemble_directory,
-	assemble_IPMs(ensemble_directory, no_models, source_priors, mix_prior, bg_scores, obs, position_start, source_length_limits),
+	assemble_IPMs(ensemble_directory, no_models, source_priors, mix_prior, bg_scores, obs, source_length_limits),
 	[-Inf], #L0 = 0
 	[0], #ie exp(0) = all of the prior is covered
 	[-Inf], #w0 = 0
@@ -34,7 +35,7 @@ Bayes_IPM_ensemble(
 	[-1e300], #Z0 = 0
 	[0], #H0 = 0,
 	obs,
-	position_start,
+	[findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]],
 	source_priors,
 	mix_prior,
 	bg_scores, #precalculated background score
@@ -42,10 +43,10 @@ Bayes_IPM_ensemble(
 	Vector{String}(),
 	no_models+1)
 
-function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, position_start::Int64, source_length_limits::UnitRange{Int64})
+function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
 	ensemble_records = Vector{Model_Record}()
 	@showprogress 1 "Assembling ICA PWM model ensemble..." for model_no in 1:no_models
-		model = ICA_PWM_model(string(model_no), source_priors, mix_prior, bg_scores, obs, position_start, source_length_limits)
+		model = ICA_PWM_model(string(model_no), source_priors, mix_prior, bg_scores, obs, source_length_limits)
 		serialize(string(ensemble_directory,model_no), model) #save the model to the ensemble directory
 		push!(ensemble_records, Model_Record(string(ensemble_directory,model_no),model.log_likelihood))
 	end
@@ -70,11 +71,11 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 		m = deserialize(m_record.path)
 		for (mode, params) in param_set
 			if mode == "permute"
-				permute_model!(m, e.model_counter, contour, e.obs_array, e.position_start, e.bg_scores, e.offsets, e.source_priors, params...)
+				permute_model!(m, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 			elseif mode == "merge"
-				merge_model!(e.models, m, e.model_counter, contour, e.obs_array,  e.position_start, e.bg_scores, e.offsets, params...)
+				merge_model!(e.models, m, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 			elseif mode == "init"
-				reinit_sources!(m, e.model_counter, contour,  e.obs_array, e.position_start, e.bg_scores, e.offsets, e.source_priors, e.mix_prior, params...)
+				reinit_sources!(m, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
 				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
 			end

@@ -1,4 +1,4 @@
-using nnlearn, BGHMM, MS_HMMBase, BioSequences, Distributions, Random, Serialization, Test
+using nnlearn, BGHMM, CLHMM, HMMBase, BioSequences, Distributions, Random, Serialization, Test
 import StatsFuns: logsumexp
 
 Random.seed!(1)
@@ -32,7 +32,7 @@ O=1000;S=50
     test_sources = nnlearn.init_logPWM_sources(test_priors, length_range)
     for source in test_sources
         for pos in 1:size(source[1])[1]
-            @test MS_HMMBase.isprobvec(exp.(source[1][pos,:]))
+            @test HMMBase.isprobvec(exp.(source[1][pos,:]))
         end
     end
 
@@ -43,7 +43,7 @@ O=1000;S=50
     @test permuted_weight_sources != test_sources
     for (s,source) in enumerate(permuted_weight_sources)
         for pos in 1:size(source[1])[1]
-            @test MS_HMMBase.isprobvec(exp.(source[1][pos,:]))
+            @test HMMBase.isprobvec(exp.(source[1][pos,:]))
             @test source[1][pos,:] != test_sources[s][1][pos,:]
         end
     end
@@ -80,16 +80,15 @@ end
     obs=[BioSequences.DNASequence("AAAAA")]
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
     coded_seqs = BGHMM.code_seqs(order_seqs)
+    obs=Array(transpose(coded_seqs))
 
-    offset=[0]
     source_pwm = zeros(1,4)
     source_pwm[1,1] = 1
     log_pwm = log.(source_pwm)
 
-    source_start=1
     source_stop=5
 
-    @test nnlearn.score_source(coded_seqs[:,1], log_pwm, source_start,source_stop) == [0.0 -Inf; 0.0 -Inf; 0.0 -Inf; 0.0 -Inf; 0.0 -Inf]
+    @test nnlearn.score_source(obs[1:5,1], log_pwm, source_stop) == [0.0 -Inf; 0.0 -Inf; 0.0 -Inf; 0.0 -Inf; 0.0 -Inf]
 
     #make sure revcomp_pwm is reversing pwms across both dimensions
     revcomp_test_pwm = zeros(2,4)
@@ -103,6 +102,7 @@ end
     obs=[BioSequences.DNASequence("ATGATGATGATG")]
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
     coded_seqs = BGHMM.code_seqs(order_seqs)
+    obs=Array(transpose(coded_seqs))
 
     source_pwm = [.7 .1 .1 .1
                   .1 .1 .1 .7
@@ -112,7 +112,7 @@ end
     source_start = 1
     source_stop = 10
     
-    @test isapprox(exp.(nnlearn.score_source(coded_seqs[:,1], log_pwm, source_start, source_stop)),
+    @test isapprox(exp.(nnlearn.score_source(obs[1:12,1], log_pwm, source_stop)),
         [.7^3 .1^3; .1^3 .1^3; .1^3 (.1*.7^2); .7^3 .1^3; .1^3 .1^3; .1^3 (.1*.7^2); .7^3 .1^3; .1^3 .1^3; .1^3 (.1*.7^2); .7^3 .1^3])
 
     #test scoring of multiple obs and sources
@@ -120,6 +120,7 @@ end
          BioSequences.DNASequence("TGATGATGATGA")]
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
     coded_seqs = BGHMM.code_seqs(order_seqs)
+    obs=Array(transpose(coded_seqs))
     
     source_pwm_2 = [.6 .1 .1 .2
                     .2 .1 .1 .6
@@ -135,7 +136,7 @@ end
     offsets=[0,0]
     mix_matrix = trues(2,2)
 
-    score_mat, source_bitindex, source_wmls = nnlearn.score_sources(sources, coded_seqs, position_start, offsets, mix_matrix)
+    score_mat, source_bitindex, source_wmls = nnlearn.score_sources(sources, obs, [12,12], mix_matrix)
 
     @test isapprox(exp.(score_mat[1,1]),target_o1_s1)
     @test isapprox(exp.(score_mat[1,2]),target_o1_s2)
@@ -158,12 +159,12 @@ end
 
     lh_target = -26.821656935021238
 
-    @test nnlearn.weave_scores(o, bg_scores, score_mat, obs_source_indices, obs_source_bitindex, source_wmls, log_motif_expectation, cardinality_penalty, position_start) == lh_target
+    @test nnlearn.weave_scores(o, 12, bg_scores, score_mat, obs_source_indices, obs_source_bitindex, source_wmls, log_motif_expectation, cardinality_penalty) == lh_target
 
-    o1_lh = nnlearn.weave_scores(1, bg_scores, score_mat, findall(mix_matrix[1,:]), source_bitindex[:,mix_matrix[1,:],1], source_wmls, log_motif_expectation, cardinality_penalty, position_start)
-    o2_lh = nnlearn.weave_scores(2, bg_scores, score_mat, findall(mix_matrix[2,:]), source_bitindex[:,mix_matrix[2,:],2], source_wmls, log_motif_expectation, cardinality_penalty, position_start)
+    o1_lh = nnlearn.weave_scores(1, 12, bg_scores, score_mat, findall(mix_matrix[1,:]), source_bitindex[:,mix_matrix[1,:],1], source_wmls, log_motif_expectation, cardinality_penalty)
+    o2_lh = nnlearn.weave_scores(2, 12, bg_scores, score_mat, findall(mix_matrix[2,:]), source_bitindex[:,mix_matrix[2,:],2], source_wmls, log_motif_expectation, cardinality_penalty)
 
-    @test nnlearn.IPM_likelihood(sources, score_mat, source_bitindex, bg_scores, mix_matrix, source_wmls, position_start) == MS_HMMBase.log_prob_sum(o1_lh,o2_lh)
+    @test nnlearn.IPM_likelihood(sources, [12,12], score_mat, source_bitindex, bg_scores, mix_matrix, source_wmls) == CLHMM.lps(o1_lh,o2_lh)
 end
 
 @testset "Full model functions" begin
@@ -185,9 +186,10 @@ end
     BioSequences.DNASequence("TGATGATGATGA")]
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
     coded_seqs = BGHMM.code_seqs(order_seqs)
-    position_start=1;offsets=[0,0]
+    obs=Array(transpose(coded_seqs))
+    obsl=[findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]]
 
-    test_model = nnlearn.ICA_PWM_model("test", source_priors, mix_prior, bg_scores, coded_seqs, position_start, offsets, src_length_limits)
+    test_model = nnlearn.ICA_PWM_model("test", source_priors, mix_prior, bg_scores, obs, src_length_limits)
     
     sources_target::Vector{Tuple{Matrix{Float64},Int64}} = [([-3.71415 -5.82712 -2.38886 -0.126762; -0.834566 -2.06535 -0.852383 -4.361], 2), ([-0.846903 -1.70222 -1.18194 -2.49741; -1.1486 -2.79613 -1.3878 -0.988191; -6.14759 -3.3357 -0.218022 -1.84412], 1), ([-8.17558 -0.0620875 -3.19203 -3.97233; -3.47489 -3.52956 -1.42089 -0.359224], 1)]
     mix_target = trues(2,3)
@@ -198,24 +200,24 @@ end
     end
     @test test_model.mixing_matrix == mix_target
     @test test_model.log_likelihood == lh_target
-
+    
     permuted_model = deepcopy(test_model)
-    nnlearn.permute_model!(permuted_model, 1, lh_target, coded_seqs, position_start, bg_scores, offsets, source_priors, 5, 18)
+    nnlearn.permute_model!(permuted_model, 1, lh_target, obs, obsl, bg_scores, source_priors, 5)
     @test permuted_model.log_likelihood > test_model.log_likelihood
 
     reinit_model = deepcopy(test_model)
-    nnlearn.reinit_sources!(reinit_model, 1, lh_target, coded_seqs, position_start, bg_scores, offsets, source_priors, mix_prior, 500)
+    nnlearn.reinit_sources!(reinit_model, 1, lh_target, obs, obsl, bg_scores, source_priors, mix_prior, 500)
     @test reinit_model.log_likelihood > test_model.log_likelihood
 
     uninform_priors = nnlearn.assemble_source_priors(3, Vector{Matrix{Float64}}(), 4.0, src_length_limits)
-    ui_model = nnlearn.ICA_PWM_model("ui", uninform_priors, mix_prior, bg_scores, coded_seqs, position_start, offsets, src_length_limits)
+    ui_model = nnlearn.ICA_PWM_model("ui", uninform_priors, mix_prior, bg_scores, obs, src_length_limits)
     merge_target = ui_model.log_likelihood
 
     path=randstring()
     test_record = nnlearn.Model_Record(path, test_model.log_likelihood)
     serialize(path,test_model)
 
-    nnlearn.merge_model!([test_record],ui_model,1,merge_target,coded_seqs,position_start,bg_scores,offsets,500)
+    nnlearn.merge_model!([test_record],ui_model,1,merge_target,obs,obsl,bg_scores,500)
 
     @test ui_model.log_likelihood > merge_target
 end
@@ -241,9 +243,10 @@ end
     BioSequences.DNASequence("TGATGATGATGA")]
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
     coded_seqs = BGHMM.code_seqs(order_seqs)
+    obs=Array(transpose(coded_seqs))
     position_start=1;offsets=[0,0]
 
-    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 10, source_priors, mix_prior, bg_scores, coded_seqs, position_start, offsets, src_length_limits)
+    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 10, source_priors, mix_prior, bg_scores, obs, src_length_limits)
 
     @test length(ensemble.models) == 10
     for model in ensemble.models

@@ -24,13 +24,13 @@ function nested_step!(e::Bayes_IPM_ensemble, perm_params::Vector{Tuple{String,An
     push!(e.log_Li, minimum([model.log_Li for model in e.models])) #log likelihood of the least likely model - the current ensemble ll contour at Xi
     push!(e.log_Xi, -i/N) #log Xi - crude estimate of the iterate's enclosed prior mass
     push!(e.log_wi, log(exp(e.log_Xi[i]) - exp(e.log_Xi[j]))) #log width of prior mass spanned by the last step
-    push!(e.log_Liwi, MS_HMMBase.log_prob_sum(e.log_Li[j],e.log_wi[j])) #log likelihood + log width = increment of evidence spanned by iterate
+    push!(e.log_Liwi, CLHMM.lps(e.log_Li[j],e.log_wi[j])) #log likelihood + log width = increment of evidence spanned by iterate
     push!(e.log_Zi, logaddexp(e.log_Zi[i],e.log_Liwi[j]))    #log evidence
 
     #information- dimensionless quantity
-    push!(e.Hi, MS_HMMBase.log_prob_sum(
-            (exp(MS_HMMBase.log_prob_sum(e.log_Liwi[j],-e.log_Zi[j])) * e.log_Li[j]), #term1
-            (exp(MS_HMMBase.log_prob_sum(e.log_Zi[i],-e.log_Zi[j])) * MS_HMMBase.log_prob_sum(e.Hi[i],e.log_Zi[i])), #term2
+    push!(e.Hi, CLHMM.lps(
+            (exp(CLHMM.lps(e.log_Liwi[j],-e.log_Zi[j])) * e.log_Li[j]), #term1
+            (exp(CLHMM.lps(e.log_Zi[i],-e.log_Zi[j])) * CLHMM.lps(e.Hi[i],e.log_Zi[i])), #term2
             -e.log_Zi[j])) #term3
 
     return 0
