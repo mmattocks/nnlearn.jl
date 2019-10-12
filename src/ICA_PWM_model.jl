@@ -102,34 +102,34 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, obs_lengt
     revcomp ? log_motif_expectation = log(0.5 / size(bg_scores)[1]) : log_motif_expectation = log(1 / size(bg_scores)[1])#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
     O = size(bg_scores)[2]
     obs_lhs=zeros(O)
-    #Threads.@threads 
-    for o in 1:O
-        obs_source_indices = findall(mix[o,:])
-        obs_source_bitindex = source_bitindex[:,mix[o,:],o]
+    Threads.@threads for o in 1:O
+        mixview=view(mix,o,:)
+        obs_source_indices = findall(mixview)
+        obs_source_bitindex = view(source_bitindex,:,mixview,o)
         obs_cardinality = length(obs_source_indices) #the more sources, the greater the cardinality_penalty
         obs_cardinality > 0 ? cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality)) : cardinality_penalty = 0.0
             
-        obs_lhs[o] = nnlearn.weave_scores(o, obs_lengths[o], bg_scores, score_mat, obs_source_indices, obs_source_bitindex, source_wmls, log_motif_expectation, cardinality_penalty, revcomp)
+        obs_lhs[o] = nnlearn.weave_scores(obs_lengths[o], view(bg_scores,:,o), view(score_mat,o,:), obs_source_indices, obs_source_bitindex, view(source_wmls,:), log_motif_expectation, cardinality_penalty, revcomp)
     end
 
     return CLHMM.lps(obs_lhs)
 end
 
-                function weave_scores(o::Int64, obsl::Int64, bg_scores::Matrix{Float64}, score_mat::Matrix{Matrix{Float64}}, obs_source_indices::Vector{Int64}, obs_source_bitindex::BitMatrix, source_wmls::Vector{Int64}, log_motif_expectation::Float64, cardinality_penalty::Float64,  revcomp::Bool=true)
+                function weave_scores(obsl::Int64, bg_scores::SubArray, score_mat::SubArray, obs_source_indices::Vector{Int64}, obs_source_bitindex::SubArray, source_wmls::SubArray, log_motif_expectation::Float64, cardinality_penalty::Float64,  revcomp::Bool=true)
                     L=obsl+1
                     lh_vec = zeros(L)#likelihood vector is one position (0 initialiser) longer than the observation
                     emit_start_idxs=[findfirst(obs_source_bitindex[:, s]) for s in 1:length(obs_source_indices)] #construct an array of the start index for every source's contribution scores
 
-                    for i in 2:L #i=1 is ithe lh_vec initializing 0, i=2 is the score of the first background position
-                        t=i-1 #t of first emission base is the sources start posn
-                        score = lh_vec[i-1] + bg_scores[t,o] + cardinality_penalty
+                    for i in 2:L #i=1 is ithe lh_vec initializing 0, i=2 is the score of the first background position (ie t=1)
+                        t=i-1
+                        score = lh_vec[i-1] + bg_scores[t] + cardinality_penalty
 
                         t_sources = obs_source_indices[obs_source_bitindex[t,:]]
                         emit_starts = emit_start_idxs[obs_source_bitindex[t,:]]
                         for (n,s) in enumerate(t_sources)
                             wml = source_wmls[s]
                             from_score = lh_vec[i-wml+1] #score at the first position of the PWM
-                            score_array = score_mat[o,s]
+                            score_array = score_mat[s]
                             score_idx = t - emit_starts[n] + 1
                             emit_score = score_array[score_idx,1] #emission score at the last position of the PWM
 

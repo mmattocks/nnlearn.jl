@@ -7,7 +7,7 @@ Functions to learn a metamotif model of nucleosome positions by nested sampling
 module nnlearn
     using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributions, CLHMM, HMMBase, ProgressMeter, Serialization
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
-    import Random: rand
+    import Random: rand, seed!
 
     mutable struct Model_Record #record struct to associate a log_Li with a saved, calculated model
         path::String
@@ -27,7 +27,7 @@ module nnlearn
                 pos_end = parse(Int64, desc_array[4])
                 seq = BioSequences.FASTA.sequence(entry)
     
-                if !hasambiguity(padded_seq)
+                if !hasambiguity(seq)
                     push!(position_df, [scaffold, pos_start, pos_end, seq])
                 end
             end
