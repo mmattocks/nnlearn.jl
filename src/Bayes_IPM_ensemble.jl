@@ -45,10 +45,14 @@ Bayes_IPM_ensemble(
 
 function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
 	ensemble_records = Vector{Model_Record}()
+	!isdir(ensemble_directory) && mkpath(ensemble_directory)
+
+	@assert size(obs)[2]==size(bg_scores)[2]
+
 	@showprogress 1 "Assembling ICA PWM model ensemble..." for model_no in 1:no_models
 		model = ICA_PWM_model(string(model_no), source_priors, mix_prior, bg_scores, obs, source_length_limits)
-		serialize(string(ensemble_directory,model_no), model) #save the model to the ensemble directory
-		push!(ensemble_records, Model_Record(string(ensemble_directory,model_no),model.log_likelihood))
+		serialize(string(ensemble_directory,'/',model_no), model) #save the model to the ensemble directory
+		push!(ensemble_records, Model_Record(string(ensemble_directory,'/',model_no),model.log_likelihood))
 	end
 
 	return ensemble_records
@@ -84,4 +88,23 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 		end
 	end
 	return nothing
+end
+
+function worker_permute(librarian::Int64, e::Bayes_IPM_ensemble, iterate::Int64, job_model::ICA_PWM_model, contour::Float64, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64)
+	candidate_found=false
+	for i=1:permute_limit
+		for (mode, params) in param_set
+			if mode == "permute"
+				permute_model!(job_model, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
+			elseif mode == "merge"
+				merge_model!(librarian, e.models, job_model, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
+			elseif mode == "init"
+				reinit_sources!(job_model, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
+			else
+				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
+			end
+			job_model.log_likelihood > contour && (put!(models_chan, (job_model,iterate)); candidate_found=true; break)
+		end
+		i==permute_limit && (put!(models_chan,(nothing,iterate)))#worker to put nothing on channel if it fails to find a model more likely than contour
+	end
 end

@@ -1,4 +1,4 @@
-using nnlearn, BGHMM, CLHMM, HMMBase, BioSequences, Distributions, Random, Serialization, Test
+using nnlearn, BGHMM, CLHMM, HMMBase, BioSequences, Distributions, Distributed, Random, Serialization, Test
 import StatsFuns: logsumexp
 
 Random.seed!(1)
@@ -36,9 +36,11 @@ O=1000;S=50
         end
     end
 
+    test_mix=nnlearn.init_mixing_matrix(0.5, 2, 10)
+
     permuted_weight_sources=deepcopy(test_sources)
-    clean = trues(O,2)
-    nnlearn.permute_source_weights!(permuted_weight_sources,100,Uniform(.0001,.02), clean)
+    clean = Vector{Bool}(trues(2))
+    nnlearn.permute_source_weights!(test_mix,permuted_weight_sources,100,Uniform(.0001,.02), clean)
 
     @test permuted_weight_sources != test_sources
     for (s,source) in enumerate(permuted_weight_sources)
@@ -50,8 +52,8 @@ O=1000;S=50
     @test sum(clean)==0
 
     permuted_length_sources=deepcopy(test_sources)
-    clean = trues(O,2)
-    nnlearn.permute_source_lengths!(permuted_length_sources,test_priors,1,1:3,clean)
+    clean = Vector{Bool}(trues(2))
+    nnlearn.permute_source_lengths!(test_mix,permuted_length_sources,test_priors,1,1:3,clean)
     @test permuted_length_sources != test_sources
 end
 
@@ -63,16 +65,16 @@ end
 
     #test mix matrix decorrelation
     empty_mix = falses(O,S)
-    clean = trues(O,S)
+    clean = Vector{Bool}(trues(O))
     nnlearn.mix_matrix_decorrelate!(empty_mix, 500, clean)
 
-    @test sum(empty_mix) == O*S-sum(clean) == 500
+    @test sum(empty_mix) == 500
 
     full_mix = trues(O,S)
-    clean = trues(O,S)
+    clean = Vector{Bool}(trues(O))
     nnlearn.mix_matrix_decorrelate!(full_mix, 500, clean)
 
-    @test O*S-sum(full_mix) == O*S-sum(clean) == 500
+    @test O*S-sum(full_mix) == 500
 end
 
 @testset "Observation setup and scoring functions" begin
@@ -132,39 +134,40 @@ end
     target_o2_s2 = [(.2*.1^2) (.2*.1^2); (.2*.1^2) (.2*.6^2); .6^3 (.2*.1^2); (.2*.1^2) (.2*.1^2); (.2*.1^2) (.2*.6^2); .6^3 (.2*.1^2); (.2*.1^2) (.2*.1^2); (.2*.1^2) (.2*.6^2); .6^3 (.2*.1^2); (.2*.1^2) (.2*.1^2)]
 
     sources = [(log.(source_pwm), 1),(log.(source_pwm_2), 1)]
+    source_wmls = [size(source[1])[1] for source in sources]
+
     position_start = 1
     offsets=[0,0]
     mix_matrix = trues(2,2)
 
-    score_mat, source_bitindex, source_wmls = nnlearn.score_sources(sources, obs, [12,12], mix_matrix)
+    score_mat1 = nnlearn.score_obs_sources(sources, Vector(obs[:,1]), 12, source_wmls)
 
-    @test isapprox(exp.(score_mat[1,1]),target_o1_s1)
-    @test isapprox(exp.(score_mat[1,2]),target_o1_s2)
-    @test isapprox(exp.(score_mat[2,1]),target_o2_s1)
-    @test isapprox(exp.(score_mat[2,2]),target_o2_s2)
+    @test isapprox(exp.(score_mat1[1]),target_o1_s1)
+    @test isapprox(exp.(score_mat1[2]),target_o1_s2)
 
-    @test any(source_bitindex[1:2,:,:]) == false
-    @test all(source_bitindex[3:12,:,:]) == true
+    score_mat2 = nnlearn.score_obs_sources(sources, Vector(obs[:,2]), 12, source_wmls)
 
-    @test source_wmls == [3,3]
+    @test isapprox(exp.(score_mat2[1]),target_o2_s1)
+    @test isapprox(exp.(score_mat2[2]),target_o2_s2)
 
     #test score weaving and IPM likelihood calculations
     o=1
     bg_scores = log.(fill(.5, (12,2)))
     log_motif_expectation = log(0.5 / size(bg_scores)[1])
     obs_source_indices = findall(mix_matrix[o,:])
-    obs_source_bitindex = source_bitindex[:,mix_matrix[o,:],o]
     obs_cardinality = length(obs_source_indices)
     cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality))
 
     lh_target = -26.821656935021238
 
-    @test nnlearn.weave_scores(o, 12, bg_scores, score_mat, obs_source_indices, obs_source_bitindex, source_wmls, log_motif_expectation, cardinality_penalty) == lh_target
+    o1_lh = nnlearn.weave_scores(12, view(bg_scores,:,1), score_mat1, findall(mix_matrix[1,:]), source_wmls, log_motif_expectation, cardinality_penalty)
+    @test isapprox(lh_target,o1_lh)
+    o2_lh = nnlearn.weave_scores(12, view(bg_scores,:,2), score_mat2, findall(mix_matrix[2,:]), source_wmls, log_motif_expectation, cardinality_penalty)
 
-    o1_lh = nnlearn.weave_scores(1, 12, bg_scores, score_mat, findall(mix_matrix[1,:]), source_bitindex[:,mix_matrix[1,:],1], source_wmls, log_motif_expectation, cardinality_penalty)
-    o2_lh = nnlearn.weave_scores(2, 12, bg_scores, score_mat, findall(mix_matrix[2,:]), source_bitindex[:,mix_matrix[2,:],2], source_wmls, log_motif_expectation, cardinality_penalty)
-
-    @test nnlearn.IPM_likelihood(sources, [12,12], score_mat, source_bitindex, bg_scores, mix_matrix, source_wmls) == CLHMM.lps(o1_lh,o2_lh)
+    lh,cache = nnlearn.IPM_likelihood(sources, obs, [12,12], bg_scores, mix_matrix, true,true)
+    @test o1_lh==cache[1]
+    @test o2_lh==cache[2]
+    @test isapprox(CLHMM.lps(o1_lh,o2_lh),lh)
 end
 
 @testset "Full model functions" begin
@@ -217,7 +220,7 @@ end
     test_record = nnlearn.Model_Record(path, test_model.log_likelihood)
     serialize(path,test_model)
 
-    nnlearn.merge_model!([test_record],ui_model,1,merge_target,obs,obsl,bg_scores,500)
+    nnlearn.merge_model!([1],[test_record],ui_model,1,merge_target,obs,obsl,bg_scores,500)
 
     @test ui_model.log_likelihood > merge_target
 end
@@ -233,44 +236,67 @@ end
     .2 .1 .1 .6
     .1 .2 .6 .1]
 
-    src_length_limits=2:3
+    src_length_limits=2:10
 
-    source_priors = nnlearn.assemble_source_priors(3, [source_pwm, source_pwm_2], 4.0, src_length_limits)
+    source_priors = nnlearn.assemble_source_priors(20, [source_pwm, source_pwm_2], 4.0, src_length_limits)
     mix_prior=.75
 
-    bg_scores = log.(fill(.5, (12,2)))
-    obs=[BioSequences.DNASequence("ATGATGATGATG")
-    BioSequences.DNASequence("TGATGATGATGA")]
+    bg_scores = log.(fill(.5, (12,9)))
+    obs=[BioSequences.DNASequence("CCGTTGACGATG")
+    BioSequences.DNASequence("CCCCGATGATGA")
+    BioSequences.DNASequence("CCCCGATGATGA")
+    BioSequences.DNASequence("TCATCATGCTGA")
+    BioSequences.DNASequence("TGATGAATCTGA")
+    BioSequences.DNASequence("CCCCGATTTTGA")
+    BioSequences.DNASequence("TCATGGGCTGAA")
+    BioSequences.DNASequence("TCATCCTGCTGA")
+    BioSequences.DNASequence("TGATGAATAAAG")
+    ]
+    
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
     coded_seqs = BGHMM.code_seqs(order_seqs)
     obs=Array(transpose(coded_seqs))
     position_start=1;offsets=[0,0]
 
-    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 10, source_priors, mix_prior, bg_scores, obs, src_length_limits)
+    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 100, source_priors, mix_prior, bg_scores, obs, src_length_limits)
 
-    @test length(ensemble.models) == 10
+    @test length(ensemble.models) == 100
     for model in ensemble.models
-        @test -75 < model.log_Li < -40
+        @test -165 < model.log_Li < -100
     end
 
-    models_to_permute = 60
+    permute_limit = 400
+    param_set = [("permute",(100,50)),("merge",(100)),("permute",(500,3)),("init",(100))]
 
-    perm_params = [("permute",(500,9)),("merge",(500)),("init",(500))]
-    new_model = nnlearn.run_permutation_routine(ensemble,perm_params,models_to_permute,-40.0)
-    @test new_model.log_likelihood > -40.0
 
-    nnlearn.nested_step!(ensemble, perm_params, models_to_permute)
-    @test length(ensemble.models) == 10
-    @test length(ensemble.log_Li) == 2
-    @test ensemble.log_Li[1] < ensemble.log_Li[2]
-    @test length(ensemble.log_Xi) == 2
-    @test length(ensemble.log_wi) == 2
-    @test length(ensemble.log_Liwi) == 2
-    @test length(ensemble.log_Zi) == 2
-    @test ensemble.log_Zi[1] < ensemble.log_Zi[2]
-    @test length(ensemble.Hi) == 2
-    @test length(ensemble.retained_posterior_samples) == 1
-    @test ensemble.model_counter==12
+    @info "Spawning worker pool..."
+    librarians=addprocs(3)
+    worker_pool=addprocs(6)
+    @everywhere using nnlearn,Random
+    @everywhere Random.seed!(1)
+    
 
-    final_logZ = nnlearn.nested_sample_posterior_to_convergence!(ensemble, perm_params, models_to_permute)
+    ####CONVERGE############
+    final_logZ = nnlearn.ns_converge!(ensemble, param_set, permute_limit, librarians, worker_pool, 3., true)
+
+
+    @test length(ensemble.models) == 100
+    @test length(ensemble.log_Li) == 995
+    for i in 1:length(ensemble.log_Li)-1
+        @test ensemble.log_Li[i] < ensemble.log_Li[i+1]
+    end
+    @test length(ensemble.log_Xi) == 995
+    @test length(ensemble.log_wi) == 995
+    @test length(ensemble.log_Liwi) == 995
+    @test length(ensemble.log_Zi) == 995
+    for i in 1:length(ensemble.log_Zi)-1
+        @test ensemble.log_Zi[i] < ensemble.log_Zi[i+1]
+    end
+    @test length(ensemble.Hi) == 995
+    @test length(ensemble.retained_posterior_samples) == 994
+    @test ensemble.model_counter==1095
+    @test isapprox(final_logZ,-18.986355698434917)
+
+    serialize(string(ensembledir,'/',"ens"),ensemble)
+    # rm(ensembledir, recursive=true)
 end

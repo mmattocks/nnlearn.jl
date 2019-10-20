@@ -45,7 +45,7 @@ function og_scoring(sources::Vector{Tuple{Matrix{Float64},Int64}}, observations:
 end
 
 
-function perf_scoring(sources::Vector{Tuple{Matrix{Float64},Int64}}, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::AbstractArray{Float64}, mix::BitMatrix, source_wmls::Vector{Int64}, revcomp::Bool=true)
+function perf_scoring(sources::Vector{Tuple{Matrix{Float64},Int64}}, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::AbstractArray{Float64}, mix::BitMatrix, source_wmls::Vector{Int64}, revcomp::Bool=true, returncache::Bool=true, cache::Vector{Float64}=zeros(0), clean::Vector{Bool}=Vector(falses(size(observations)[2])))
     revcomp ? log_motif_expectation = log(0.5 / size(bg_scores)[1]) : log_motif_expectation = log(1 / size(bg_scores)[1])#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
     O = size(bg_scores)[2]
     obs_lhs=Vector{Vector{Float64}}()
@@ -59,19 +59,23 @@ function perf_scoring(sources::Vector{Tuple{Matrix{Float64},Int64}}, observation
         opt = floor(O/nt) #obs per thread
         for i in 1:Int(opt+(t==nt)*(O%nt))
             o=Int(i+(t-1)*opt)
-            obsl = obs_lengths[o]
-            mixview=view(mix,o,:)
-            mixwmls=source_wmls[mixview]
-            score_mat=score_obs_sources(sources[mixview], observations[1:obsl,o], obsl, mixwmls)
-            obs_source_indices = findall(mixview)
-            obs_cardinality = length(obs_source_indices) #the more sources, the greater the cardinality_penalty
-            obs_cardinality > 0 ? cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality)) : cardinality_penalty = 0.0
-                
-            obs_lhs[t][i] =lo_weave(obsl, view(bg_scores,:,o), score_mat, obs_source_indices, mixwmls, log_motif_expectation, cardinality_penalty, revcomp)
+            if clean[o]
+                obs_lhs[t][i]=cache[o]
+            else
+                obsl = obs_lengths[o]
+                mixview=view(mix,o,:)
+                mixwmls=source_wmls[mixview]
+                score_mat=score_obs_sources(sources[mixview], observations[1:obsl,o], obsl, mixwmls, revcomp=revcomp)
+                obs_source_indices = findall(mixview)
+                obs_cardinality = length(obs_source_indices) #the more sources, the greater the cardinality_penalty
+                obs_cardinality > 0 ? cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality)) : cardinality_penalty = 0.0
+                    
+                obs_lhs[t][i]=weave_scores(obsl, view(bg_scores,:,o), score_mat, obs_source_indices, mixwmls, log_motif_expectation, cardinality_penalty, revcomp)
+            end
         end
     end
 
-    return CLHMM.lps([CLHMM.lps(obs_lhs[t]) for t in 1:nt])
+    returncache ? (return vcat(obs_lhs...)) : (return CLHMM.lps([CLHMM.lps(obs_lhs[t]) for t in 1:nt]))
 end
 
 function score_obs_sources(sources::Vector{Tuple{Matrix{Float64},Int64}}, observation::Vector{Int64}, obsl::Int64, source_wmls::Vector{Int64}; revcomp=true) #scores:OxS matrix of score matrices; source_bitindex: TxSxO bitcube indexing which T values have scores for each SxO; clean matrix: tracks indices that are clean and do not need to be recalculated in permutations

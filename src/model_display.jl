@@ -39,7 +39,6 @@ function logo_from_model(model::ICA_PWM_model,svg_output::String;freq_sort::Bool
 
     curry = 0
     for (frequency, index, source) in source_tups
-        @info "$index"
         curry += yscale
         font1y = curry-190
         ndig = ndigits(index+1)
@@ -49,6 +48,7 @@ function logo_from_model(model::ICA_PWM_model,svg_output::String;freq_sort::Bool
     end
 
     write(file, svg_footer())
+    @info "Logo written."
     close(file)
 end
 

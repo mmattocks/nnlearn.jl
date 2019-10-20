@@ -16,8 +16,7 @@ function init_IPM(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}
     obs_lengths=[findfirst(iszero,observations[:,o])-1 for o in 1:size(observations)[2]]
     sources=init_logPWM_sources(source_priors, source_length_limits)
     mix=init_mixing_matrix(mix_prior,O,S)
-    score_mat, source_bitindex, source_wmls=score_sources(sources, observations, obs_lengths, mix)
-    log_lh = IPM_likelihood(sources, obs_lengths, score_mat, source_bitindex, bg_scores, mix, source_wmls)
+    log_lh = IPM_likelihood(sources, observations, obs_lengths, bg_scores, mix)
 
    return ICA_PWM_model(name, sources, source_length_limits, mix, log_lh)
 end
@@ -53,25 +52,54 @@ end
                 end
 
 #LIKELIHOOD SCORING FUNCS
-function score_sources(sources::Vector{Tuple{Matrix{Float64},Int64}}, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, mix_matrix::BitMatrix; scores::Matrix{Matrix{Float64}}=Matrix{Matrix{Float64}}(undef,(size(observations)[2],length(sources))), source_bitindex::BitArray=falses((size(observations)[1]-1), length(sources), size(observations)[2]), clean_matrix::BitMatrix=falses(size(mix_matrix)), revcomp=true) #scores:OxS matrix of score matrices; source_bitindex: TxSxO bitcube indexing which T values have scores for each SxO; clean matrix: tracks indices that are clean and do not need to be recalculated in permutations
-    calc_matrix = BitMatrix(mix_matrix.-clean_matrix) #when permuting, don't want to recalculate oxs indices that were not affected by permutation
-    indices     = findall(calc_matrix) #indices to calclulate
-    source_wmls = [size(source[1])[1] for source in sources]
-
-    Threads.@threads for idx in indices
-        o,s     = idx[1],idx[2]
-        source  = sources[s][1] #get the PWM from the source tuple
-        wml     = source_wmls[s] #weight matrix length
-        obsl = obs_lengths[o] #observation length
-        source_stop=obsl-wml+1 #stop scannng th source across the observation here
-
-        scores[o,s] = nnlearn.score_source(observations[1:obsl,o], source, source_stop, revcomp) #get the scores for this oxs
-
-        source_bitindex[wml:obsl,s,o] .= true #set bitindex from the initial source emission base to the end of the observations matrix to true
+function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::AbstractArray{Float64}, mix::BitMatrix, revcomp::Bool=true, returncache::Bool=false, cache::Vector{Float64}=zeros(0), clean::Vector{Bool}=Vector(falses(size(observations)[2])))
+    revcomp ? log_motif_expectation = log(0.5 / size(bg_scores)[1]) : log_motif_expectation = log(1 / size(bg_scores)[1])#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
+    source_wmls=[size(source[1])[1] for source in sources]
+    O = size(bg_scores)[2]
+    obs_lhs=Vector{Vector{Float64}}()
+    nt=Threads.nthreads()
+    for t in 1:nt-1
+        push!(obs_lhs,zeros(Int(floor(O/nt))))
+    end
+    push!(obs_lhs, zeros(Int(floor(O/nt)+(O%nt))))
+    
+    #Threads.@threads 
+    for t in 1:nt
+        opt = floor(O/nt) #obs per thread
+        for i in 1:Int(opt+(t==nt)*(O%nt))
+            o=Int(i+(t-1)*opt)
+            if clean[o]
+                obs_lhs[t][i]=cache[o]
+            else
+                obsl = obs_lengths[o]
+                mixview=view(mix,o,:)
+                mixwmls=source_wmls[mixview]
+                score_mat=score_obs_sources(sources[mixview], observations[1:obsl,o], obsl, mixwmls, revcomp=revcomp)
+                obs_source_indices = findall(mixview)
+                obs_cardinality = length(obs_source_indices) #the more sources, the greater the cardinality_penalty
+                obs_cardinality > 0 ? cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality)) : cardinality_penalty = 0.0
+                    
+                obs_lhs[t][i]=weave_scores(obsl, view(bg_scores,:,o), score_mat, obs_source_indices, mixwmls, log_motif_expectation, cardinality_penalty, revcomp)
+            end
+        end
     end
 
-    return scores, source_bitindex, source_wmls
+    returncache ? (return CLHMM.lps([CLHMM.lps(obs_lhs[t]) for t in 1:nt]), vcat(obs_lhs...)) : (return CLHMM.lps([CLHMM.lps(obs_lhs[t]) for t in 1:nt]))
 end
+
+                function score_obs_sources(sources::Vector{Tuple{Matrix{Float64},Int64}}, observation::Vector{Int64}, obsl::Int64, source_wmls::Vector{Int64}; revcomp=true) 
+                    scores=Vector{Matrix{Float64}}()
+
+                    for (s,source) in enumerate(sources)
+                        pwm = source[1] #get the PWM from the source tuple
+                        wml = source_wmls[s] #weight matrix length
+                        source_stop=obsl-wml+1 #stop scannng th source across the observation here
+
+                        push!(scores, nnlearn.score_source(observation, pwm, source_stop, revcomp)) #get the scores for this oxs
+                    end
+
+                    return scores
+                end
 
                 function score_source(observation::AbstractArray{Int64,1}, source::Matrix{Float64}, source_stop::Int64, revcomp::Bool=true)
                     revcomp ? (revsource = revcomp_pwm(source); score_matrix = zeros(source_stop,2)) : score_matrix = zeros(source_stop)
@@ -98,41 +126,31 @@ end
                                     return pwm[end:-1:1,end:-1:1]
                                 end
 
-function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, obs_lengths::Vector{Int64}, score_mat::Matrix{Matrix{Float64}}, source_bitindex::BitArray, bg_scores::AbstractArray{Float64}, mix::BitMatrix, source_wmls::Vector{Int64}, revcomp::Bool=true)
-    revcomp ? log_motif_expectation = log(0.5 / size(bg_scores)[1]) : log_motif_expectation = log(1 / size(bg_scores)[1])#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
-    O = size(bg_scores)[2]
-    obs_lhs=zeros(O)
-    Threads.@threads for o in 1:O
-        mixview=view(mix,o,:)
-        obs_source_indices = findall(mixview)
-        obs_source_bitindex = view(source_bitindex,:,mixview,o)
-        obs_cardinality = length(obs_source_indices) #the more sources, the greater the cardinality_penalty
-        obs_cardinality > 0 ? cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality)) : cardinality_penalty = 0.0
-            
-        obs_lhs[o] = nnlearn.weave_scores(obs_lengths[o], view(bg_scores,:,o), view(score_mat,o,:), obs_source_indices, obs_source_bitindex, view(source_wmls,:), log_motif_expectation, cardinality_penalty, revcomp)
-    end
 
-    return CLHMM.lps(obs_lhs)
-end
-
-                function weave_scores(obsl::Int64, bg_scores::SubArray, score_mat::SubArray, obs_source_indices::Vector{Int64}, obs_source_bitindex::SubArray, source_wmls::SubArray, log_motif_expectation::Float64, cardinality_penalty::Float64,  revcomp::Bool=true)
+                function weave_scores(obsl::Int64, bg_scores::SubArray, score_mat::Vector{Matrix{Float64}}, obs_source_indices::Vector{Int64}, source_wmls::Vector{Int64}, log_motif_expectation::Float64, cardinality_penalty::Float64,  revcomp::Bool=true)
                     L=obsl+1
                     lh_vec = zeros(L)#likelihood vector is one position (0 initialiser) longer than the observation
-                    emit_start_idxs=[findfirst(obs_source_bitindex[:, s]) for s in 1:length(obs_source_indices)] #construct an array of the start index for every source's contribution scores
-
-                    for i in 2:L #i=1 is ithe lh_vec initializing 0, i=2 is the score of the first background position (ie t=1)
+                    osi_emitting = Vector{Int64}()
+                
+                    @inbounds for i in 2:L #i=1 is ithe lh_vec initializing 0, i=2 is the score of the first background position (ie t=1)
                         t=i-1
                         score = lh_vec[i-1] + bg_scores[t] + cardinality_penalty
-
-                        t_sources = obs_source_indices[obs_source_bitindex[t,:]]
-                        emit_starts = emit_start_idxs[obs_source_bitindex[t,:]]
-                        for (n,s) in enumerate(t_sources)
-                            wml = source_wmls[s]
+                
+                        if length(osi_emitting)<length(obs_source_indices)
+                            for n in 1:length(obs_source_indices)
+                                if !(n in osi_emitting)
+                                    t>= source_wmls[n] && (push!(osi_emitting,n))
+                                end
+                            end
+                        end
+                
+                        for n in osi_emitting
+                            wml = source_wmls[n]
                             from_score = lh_vec[i-wml+1] #score at the first position of the PWM
-                            score_array = score_mat[s]
-                            score_idx = t - emit_starts[n] + 1
+                            score_array = score_mat[n]
+                            score_idx = t - wml + 1
                             emit_score = score_array[score_idx,1] #emission score at the last position of the PWM
-
+                
                             score = logaddexp(score, CLHMM.lps(from_score, emit_score, log_motif_expectation))
                             if revcomp #repeat each source contribution with the revcomp score vector if required
                                 emit_score = score_array[score_idx,2]
@@ -155,26 +173,20 @@ function permute_model!(m::ICA_PWM_model, model_no::Int64, contour::Float64, obs
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
-    score_mat, source_bitindex, source_wmls=score_sources(m.sources, observations, obs_lengths, m.mixing_matrix) #get scores and indices once before iterating
-    clean = m.mixing_matrix
+    a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true)
+    clean=Vector{Bool}(trues(O))
 
     while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
-
         mix_moves > 0 && mix_matrix_decorrelate!(m.mixing_matrix, mix_moves, clean)
-
-        PWM_weight_moves > 0 && permute_source_weights!(m.sources, PWM_weight_moves, PWM_shift_dist, clean)
-
-        PWM_length_moves > 0 && permute_source_lengths!(m.sources, priors, PWM_length_moves, m.source_length_limits, clean)
-
-        score_mat, source_bitindex, source_wmls=score_sources(m.sources, observations, obs_lengths, m.mixing_matrix)
-        m.log_likelihood = IPM_likelihood(m.sources, obs_lengths, score_mat, source_bitindex, bg_scores, m.mixing_matrix, source_wmls)
-    
+        PWM_weight_moves > 0 && permute_source_weights!(m.mixing_matrix, m.sources, PWM_weight_moves, PWM_shift_dist, clean)
+        PWM_length_moves > 0 && permute_source_lengths!(m.mixing_matrix, m.sources, priors, PWM_length_moves, m.source_length_limits, clean)
+        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
         iterate += 1
-    end
+        end
 end
 
                 #PERMUTATION SUBFUNCS
-                function mix_matrix_decorrelate!(mix::BitMatrix, moves::Int64, clean::BitMatrix)
+                function mix_matrix_decorrelate!(mix::BitMatrix, moves::Int64, clean::Vector{Bool})
                     indices_to_flip = Vector{CartesianIndex{2}}()
                     for i in 1:moves
                         index_to_flip = rand(CartesianIndices(mix))
@@ -184,13 +196,13 @@ end
                         push!(indices_to_flip, index_to_flip)
                     end
                     mix[indices_to_flip] .= .!mix[indices_to_flip]
-                    clean[indices_to_flip] .= false #track dirty indices
+                    clean[unique([idx[1] for idx in indices_to_flip])] .= false #track dirty indices
                 end
 
-                function permute_source_weights!(sources::Vector{Tuple{Matrix{Float64},Int64}}, moves::Int64, PWM_shift_dist::Distributions.Uniform, clean::BitMatrix)
+                function permute_source_weights!(mix::BitMatrix, sources::Vector{Tuple{Matrix{Float64},Int64}}, moves::Int64, PWM_shift_dist::Distributions.Uniform, clean::Vector{Bool})
                     for move in 1:moves
                         source_no = rand(1:length(sources))
-                        clean[:,source_no].=false #all obs with this source in the mix matrix will be dirty
+                        clean[mix[:,source_no]].=false #all obs with this source in the mix matrix will be dirty
                         source_pos = rand(1:size(sources[source_no][1])[1])
                         pos_WM = exp.(sources[source_no][1][source_pos,:]) #leaving logspace
 
@@ -220,10 +232,10 @@ end
                     end
                 end
 
-                function permute_source_lengths!(sources::Vector{Tuple{Matrix{Float64},Int64}}, priors::Vector{Vector{Dirichlet{Float64}}}, moves::Int64, length_limits::UnitRange{Int64}, clean::BitMatrix, uninformative::Dirichlet=Dirichlet([.25,.25,.25,.25]))
+                function permute_source_lengths!(mix::BitMatrix, sources::Vector{Tuple{Matrix{Float64},Int64}}, priors::Vector{Vector{Dirichlet{Float64}}}, moves::Int64, length_limits::UnitRange{Int64}, clean::Vector{Bool}, uninformative::Dirichlet=Dirichlet([.25,.25,.25,.25]))
                     for move in 1:moves
                         source_no = rand(1:length(sources))
-                        clean[:,source_no].=false #all obs with this source in the mix matrix will be dirty
+                        clean[mix[:,source_no]].=false #all obs with this source in the mix matrix will be dirty
                         source_PWM, prior_idx = sources[source_no]
                         source_length = size(source_PWM)[1]
                         prior = priors[source_no]
@@ -258,23 +270,23 @@ end
                 end
 
 #iterative merging with other models in the ensemble
-function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
+function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
     m.name = string(model_no); m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
-    score_mat, source_bitindex, source_wmls=score_sources(m.sources, observations, obs_lengths, m.mixing_matrix) #get scores and indices once before iterating
-    clean = m.mixing_matrix
+    a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true)
+    clean=Vector{Bool}(trues(O))
+
 
     while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
-        merge_model = deserialize(rand(models).path) #randomly select a model to merge
+        merge_model = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge
         s = rand(1:S)
         m.sources[s] = merge_model.sources[s]
         m.mixing_matrix[:,s] = merge_model.mixing_matrix[:,s]
-        clean[:, s] .= false
+        clean[m.mixing_matrix[:,s]].=false
 
-        score_mat, source_bitindex, source_wmls=score_sources(m.sources, observations, obs_lengths, m.mixing_matrix)
-        m.log_likelihood = IPM_likelihood(m.sources, obs_lengths, score_mat, source_bitindex, bg_scores, m.mixing_matrix, source_wmls)
+        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
         iterate += 1
     end
 end
@@ -285,17 +297,16 @@ function reinit_sources!(m::ICA_PWM_model, model_no::Int64, contour::Float64, ob
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
-    score_mat, source_bitindex, source_wmls=score_sources(m.sources, observations, obs_lengths, m.mixing_matrix) #get scores and indices once before iterating)
-    clean = m.mixing_matrix
+    a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true)
+    clean=Vector{Bool}(trues(O))
 
     while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         s_to_reinit=rand(1:S) # pick a random source to reinitialise
         m.sources[s_to_reinit] = init_logPWM_sources([source_priors[s_to_reinit]], m.source_length_limits)[1]
         m.mixing_matrix[:,s_to_reinit] = init_mixing_matrix(mix_prior,O,1)
-        clean[:, s_to_reinit] .= false
+        clean[m.mixing_matrix[:,s_to_reinit]].=false
 
-        score_mat, source_bitindex, source_wmls=score_sources(m.sources, observations, obs_lengths, m.mixing_matrix)
-        m.log_likelihood = IPM_likelihood(m.sources, obs_lengths, score_mat, source_bitindex, bg_scores, m.mixing_matrix, source_wmls)
+        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
         iterate += 1
     end
 end
