@@ -86,13 +86,13 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 		for (mode, params) in param_set
 			if mode == "permute"
 				reset && (m = deepcopy(original))
-				permute_model!(m, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
+				permute_model!(m, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 			elseif mode == "merge"
 				reset && (m = deepcopy(original))
-				merge_model!(e.models, m, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
+				merge_model!(e.models, m, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 			elseif mode == "init"
 				reset && (m = deepcopy(original))
-				reinit_sources!(m, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
+				reinit_sources!(m, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
 				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
 			end
@@ -119,17 +119,17 @@ function worker_permute(librarian::Int64, job_chan::RemoteChannel, models_chan::
 			for (mode, params) in param_set
 				if mode == "permute"
 					reset && (job_model = deepcopy(original))
-					permute_model!(job_model, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
+					permute_model!(job_model, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 				elseif mode == "merge"
 					reset && (job_model = deepcopy(original))
-					merge_model!(librarian, e.models, job_model, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
+					merge_model!(librarian, e.models, job_model, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 				elseif mode == "init"
 					reset && (job_model = deepcopy(original))
-					reinit_sources!(job_model, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
+					reinit_sources!(job_model, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 				else
 					@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
 				end
-				job_model.log_likelihood > contour && (put!(models_chan, job_model); break)
+				job_model.log_likelihood > contour && (put!(models_chan, job_model); break; break)
 			end
 		i==permute_limit && (put!(models_chan,nothing);persist=false)#worker to put nothing on channel if it fails to find a model more likely than contour
 		end

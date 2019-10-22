@@ -164,9 +164,9 @@ end
 #DECORRELATION FUNCTIONS
 
 #random, iterative permutation
-function permute_model!(m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=10, permutation_moves::Int64=100, move_type_weights::Vector{Float64}=ones(3)/3, PWM_shift_dist::Distributions.Uniform=Uniform(.0001,.02)) #shift_dist is given in decimal probability values- converted to log space in permute_source_lengths!
+function permute_model!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=10, permutation_moves::Int64=100, move_type_weights::Vector{Float64}=ones(3)/3, PWM_shift_dist::Distributions.Uniform=Uniform(.0001,.02)) #shift_dist is given in decimal probability values- converted to log space in permute_source_lengths!
 
-    m.name = string(model_no); m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
     @assert length(move_type_weights) == 3
     mix_moves, PWM_weight_moves, PWM_length_moves = Int.(round.(permutation_moves .* move_type_weights)) #divide total number of moves between three move types by supplied weights
     mix_moves > length(m.mixing_matrix) && (mix_moves = length(m.mixing_matrix))
@@ -270,8 +270,8 @@ end
                 end
 
 #iterative merging with other models in the ensemble
-function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
-    m.name = string(model_no); m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
+    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
@@ -291,8 +291,8 @@ function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, mo
     end
 end
 
-function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
-    m.name = string(model_no); m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
+    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
@@ -313,8 +313,8 @@ function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m:
 end
 
 #iterative source reinitialisation from priors
-function reinit_sources!(m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, iterates::Int64)
-    m.name = string(model_no); m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+function reinit_sources!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, iterates::Int64)
+    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 

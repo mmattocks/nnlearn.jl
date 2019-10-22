@@ -24,12 +24,12 @@ const prior_wt=3.0
 using Distributed, Serialization
 
 @info "Adding librarians and workers..."
-# remote_machine = "10.0.0.2"
-librarians=addprocs(1)
-local_pool=addprocs(1)
-# remote_pool=addprocs([(remote_machine, 1)], tunnel=true)
-# worker_pool=vcat(local_pool,remote_pool)
-worker_pool=local_pool
+remote_machine = "10.0.0.2"
+librarians=addprocs(2)
+local_pool=addprocs(2)
+remote_pool=addprocs([(remote_machine, 1)], tunnel=true)
+worker_pool=vcat(local_pool,remote_pool)
+# worker_pool=local_pool
 
 @info "Loading libraries..."
 # using nnlearn, Random, Serialization

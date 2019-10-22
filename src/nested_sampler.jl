@@ -18,7 +18,7 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64)
         candidate=run_permutation_routine(e, param_set, permute_limit, ll_contour)
         if !(candidate===nothing)
             model_selected=true
-            new_model_record = Model_Record(string(e.ensemble_directory,'/',candidate.name), candidate.log_likelihood);
+            new_model_record = Model_Record(string(e.ensemble_directory,'/',e.model_counter), candidate.log_likelihood);
             push!(e.models, new_model_record);
             serialize(new_model_record.path, candidate)
             e.model_counter +=1
@@ -65,7 +65,7 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
         if !(candidate===nothing)
             if candidate.log_likelihood > ll_contour
                 model_selected=true
-                new_model_record = Model_Record(string(e.ensemble_directory,'/',candidate.name), candidate.log_likelihood);
+                new_model_record = Model_Record(string(e.ensemble_directory,'/',e.model_counter), candidate.log_likelihood);
                 push!(e.models, new_model_record);
                 serialize(new_model_record.path, candidate)
                 e.model_counter +=1
