@@ -286,10 +286,10 @@ end
     @test length(sp_ensemble.models) == 200
     @test length(sp_ensemble.log_Li) == length(sp_ensemble.log_Xi) == length(sp_ensemble.log_wi) == length(sp_ensemble.log_Liwi) == length(sp_ensemble.log_Zi) == length(sp_ensemble.Hi) == sp_ensemble.model_counter-200
     for i in 1:length(sp_ensemble.log_Li)-1
-        @test sp_ensemble.log_Li[i] < sp_ensemble.log_Li[i+1]
+        @test sp_ensemble.log_Li[i] <= sp_ensemble.log_Li[i+1]
     end
     for i in 1:length(sp_ensemble.log_Zi)-1
-        @test sp_ensemble.log_Zi[i] < sp_ensemble.log_Zi[i+1]
+        @test sp_ensemble.log_Zi[i] <= sp_ensemble.log_Zi[i+1]
     end
     @test sp_logZ > -104.0
 
@@ -310,10 +310,10 @@ end
     @test length(ensemble.models) == 200
     @test length(ensemble.log_Li) == length(ensemble.log_Xi) == length(ensemble.log_wi) == length(ensemble.log_Liwi) == length(ensemble.log_Zi) == length(ensemble.Hi) == ensemble.model_counter-200
     for i in 1:length(ensemble.log_Li)-1
-        @test ensemble.log_Li[i] < ensemble.log_Li[i+1]
+        @test ensemble.log_Li[i] <= ensemble.log_Li[i+1]
     end
     for i in 1:length(ensemble.log_Zi)-1
-        @test ensemble.log_Zi[i] < ensemble.log_Zi[i+1]
+        @test ensemble.log_Zi[i] <= ensemble.log_Zi[i+1]
     end
     @test final_logZ > -104.0
 
