@@ -74,6 +74,19 @@ module nnlearn
                     return prior
                 end
 
+    function read_fa_wms_tr(path::String)
+        wms=Vector{Matrix{Float64}}()
+        wm=zeros(1,4)
+        f=open(path)
+        for line in eachline(f)
+            prefix=line[1:2]
+            prefix == "01" && (wm=transpose([parse(Float64,i) for i in split(line)[2:end]]))
+            prefix != "01" && prefix != "NA" && prefix != "PO" && prefix != "//" && (wm=vcat(wm, transpose([parse(Float64,i) for i in split(line)[2:end]])))
+            prefix == "//" && push!(wms, wm)
+        end
+        return wms
+    end
+
     include("ICA_PWM_model.jl")
     include("Bayes_IPM_ensemble.jl")
     include("nested_sampler.jl")

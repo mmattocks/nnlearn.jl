@@ -54,7 +54,7 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan, param_set, permute_limi
     return 0
 end
     
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001, verbose::Bool=true)
+function ns_converge!(e::Bayes_IPM_ensemble, param_set::Vector{Tuple}, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001, verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
     model_chan= RemoteChannel(()->Channel{Tuple{ICA_PWM_model,Int64}}(length(worker_pool))) #channel to take EM iterates off of
