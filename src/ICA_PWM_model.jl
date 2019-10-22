@@ -182,7 +182,7 @@ function permute_model!(m::ICA_PWM_model, model_no::Int64, contour::Float64, obs
         PWM_length_moves > 0 && permute_source_lengths!(m.mixing_matrix, m.sources, priors, PWM_length_moves, m.source_length_limits, clean)
         m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
         iterate += 1
-        end
+    end
 end
 
                 #PERMUTATION SUBFUNCS

@@ -26,7 +26,7 @@ using Distributed, Serialization
 @info "Adding librarians and workers..."
 # remote_machine = "10.0.0.2"
 librarians=addprocs(1)
-local_pool=addprocs(2)
+local_pool=addprocs(1)
 # remote_pool=addprocs([(remote_machine, 1)], tunnel=true)
 # worker_pool=vcat(local_pool,remote_pool)
 worker_pool=local_pool
@@ -49,7 +49,7 @@ wm_priors = nnlearn.read_fa_wms_tr(prior_wms_path)
 source_priors = nnlearn.assemble_source_priors(no_sources, wm_priors, prior_wt, source_length_range)
 
 @info "Initialising ICA PWM model ensemble for nested sampling..."
-isfile(string(ensemble_directory,'/',"ens") ? (ensemble = deserialize(string(ensemble_directory,'/',"ens"))) :
+isfile(string(ensemble_directory,'/',"ens")) ? (ensemble = deserialize(string(ensemble_directory,'/',"ens"))) :
     (ensemble = nnlearn.Bayes_IPM_ensemble(ensemble_directory, ensemble_size, source_priors, mixing_prior, BGHMM_lh_matrix, coded_seqs, source_length_range))
 
 @info "Learning motifs by nested sampling of posterior..."

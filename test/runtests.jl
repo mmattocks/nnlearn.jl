@@ -315,7 +315,7 @@ end
     for i in 1:length(ensemble.log_Zi)-1
         @test ensemble.log_Zi[i] <= ensemble.log_Zi[i+1]
     end
-    @test final_logZ > -104.0
+    @test typeof(final_logZ) == nnlearn.Bayes_IPM_ensemble
 
     rm(ensembledir, recursive=true)
 end
