@@ -13,4 +13,6 @@ serialize(position_df_binary,sib_position_df)
 obs_matrix = nnlearn.observation_setup(sib_position_df)
 
 @info "Serializing coded observation sets..."
-serialize(code_binary,obs_matrix)
+serialize(code_binary,Matrix(transpose(obs_matrix)))
+
+@info "Job done."

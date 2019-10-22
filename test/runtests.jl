@@ -232,6 +232,7 @@ end
 
 @testset "Ensemble assembly and nested sampling functions" begin
     ensembledir = randstring()
+    spensembledir = randstring()
 
     source_pwm = [.7 .1 .1 .1
     .1 .1 .1 .7
@@ -264,16 +265,37 @@ end
     position_start=1;offsets=[0,0]
 
     ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 200, source_priors, mix_prior, bg_scores, obs, src_length_limits)
+    sp_ensemble = nnlearn.Bayes_IPM_ensemble(spensembledir, 200, source_priors, mix_prior, bg_scores, obs, src_length_limits)
 
     @test length(ensemble.models) == 200
     for model in ensemble.models
-        @test -150 < model.log_Li < -30
+        @test -150 < model.log_Li < -25
+    end
+
+    @test length(sp_ensemble.models) == 200
+    for model in sp_ensemble.models
+        @test -150 < model.log_Li < -25
     end
 
     permute_limit = 900
     param_set = [("permute",(100,50)),("merge",(100)),("permute",(500,3)),("init",(100))]
 
+    @info "Testing threaded convergence..."
+    @info "Spawning worker pool..."
+    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 25.)
 
+    @test length(sp_ensemble.models) == 200
+    @test length(sp_ensemble.log_Li) == length(sp_ensemble.log_Xi) == length(sp_ensemble.log_wi) == length(sp_ensemble.log_Liwi) == length(sp_ensemble.log_Zi) == length(sp_ensemble.Hi) == sp_ensemble.model_counter-200
+    for i in 1:length(sp_ensemble.log_Li)-1
+        @test sp_ensemble.log_Li[i] < sp_ensemble.log_Li[i+1]
+    end
+    for i in 1:length(sp_ensemble.log_Zi)-1
+        @test sp_ensemble.log_Zi[i] < sp_ensemble.log_Zi[i+1]
+    end
+    @test sp_logZ > -104.0
+
+
+    @info "Testing multiprocess convergence..."
     @info "Spawning worker pool..."
     librarians=addprocs(1)
     worker_pool=addprocs(1)
@@ -281,7 +303,7 @@ end
     @everywhere Random.seed!(1)
     
     ####CONVERGE############
-    final_logZ = nnlearn.ns_converge!(ensemble, param_set, permute_limit, librarians, worker_pool, 25., false)
+    final_logZ = nnlearn.ns_converge!(ensemble, param_set, permute_limit, librarians, worker_pool, 25.)
 
     rmprocs(worker_pool)
     rmprocs(librarians)

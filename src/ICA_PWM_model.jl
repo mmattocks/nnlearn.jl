@@ -270,6 +270,27 @@ end
                 end
 
 #iterative merging with other models in the ensemble
+function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
+    m.name = string(model_no); m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+    T,O = size(observations); T=T-1
+    S = length(m.sources)
+
+    a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true)
+    clean=Vector{Bool}(trues(O))
+
+
+    while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+        merge_model = deserialize(rand(models).path) #randomly select a model to merge
+        s = rand(1:S)
+        m.sources[s] = merge_model.sources[s]
+        m.mixing_matrix[:,s] = merge_model.mixing_matrix[:,s]
+        clean[m.mixing_matrix[:,s]].=false
+
+        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
+        iterate += 1
+    end
+end
+
 function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, model_no::Int64, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
     m.name = string(model_no); m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
