@@ -78,16 +78,20 @@ end
 #						-(iterates) for init params
 #						merge (iteratively copy a source + mix matrix row from another model in the ensemble until lh>contour or iterate						limit reached)
 #						-(iterates) for merpge params
-function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{String,Any}}, models_to_permute::Int64, contour::Float64)
+function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{String,Any}}, models_to_permute::Int64, contour::Float64; reset=true)
 	@showprogress 2 "Permuting models, search contour $contour: " for i = 1:models_to_permute
 		m_record = rand(e.models)
 		m = deserialize(m_record.path)
+		original = deepcopy(m)
 		for (mode, params) in param_set
 			if mode == "permute"
+				reset && m = deepcopy(original)
 				permute_model!(m, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 			elseif mode == "merge"
+				reset && m = deepcopy(original)
 				merge_model!(e.models, m, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 			elseif mode == "init"
+				reset && m = deepcopy(original)
 				reinit_sources!(m, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
 				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
@@ -99,15 +103,19 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 	return nothing
 end
 
-function worker_permute(librarian::Int64, e::Bayes_IPM_ensemble, iterate::Int64, job_model::ICA_PWM_model, contour::Float64, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64)
+function worker_permute(librarian::Int64, e::Bayes_IPM_ensemble, iterate::Int64, job_model::ICA_PWM_model, contour::Float64, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; reset=true)
 	candidate_found=false
+	original = deepcopy(job_model)
 	for i=1:permute_limit
 		for (mode, params) in param_set
 			if mode == "permute"
+				reset && job_model = deepcopy(original)
 				permute_model!(job_model, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 			elseif mode == "merge"
+				reset && job_model = deepcopy(original)
 				merge_model!(librarian, e.models, job_model, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 			elseif mode == "init"
+				reset && job_model = deepcopy(original)
 				reinit_sources!(job_model, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
 				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
