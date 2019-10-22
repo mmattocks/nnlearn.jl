@@ -168,6 +168,9 @@ end
     @test o1_lh==cache[1]
     @test o2_lh==cache[2]
     @test isapprox(CLHMM.lps(o1_lh,o2_lh),lh)
+
+    naive = nnlearn.IPM_likelihood(sources, obs, [findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]], bg_scores,falses(size(obs)[2],length(sources)))
+
 end
 
 @testset "Full model functions" begin
@@ -218,11 +221,13 @@ end
 
     path=randstring()
     test_record = nnlearn.Model_Record(path, test_model.log_likelihood)
-    serialize(path,test_model)
+    serialize(path, test_model)
 
-    nnlearn.merge_model!([1],[test_record],ui_model,1,merge_target,obs,obsl,bg_scores,500)
+    nnlearn.merge_model!(1,[test_record],ui_model,1,merge_target,obs,obsl,bg_scores,500)
 
     @test ui_model.log_likelihood > merge_target
+
+    rm(path)
 end
 
 @testset "Ensemble assembly and nested sampling functions" begin
@@ -236,10 +241,10 @@ end
     .2 .1 .1 .6
     .1 .2 .6 .1]
 
-    src_length_limits=2:10
+    src_length_limits=2:12
 
-    source_priors = nnlearn.assemble_source_priors(20, [source_pwm, source_pwm_2], 4.0, src_length_limits)
-    mix_prior=.75
+    source_priors = nnlearn.assemble_source_priors(60, [source_pwm, source_pwm_2], 4.0, src_length_limits)
+    mix_prior=.5
 
     bg_scores = log.(fill(.5, (12,9)))
     obs=[BioSequences.DNASequence("CCGTTGACGATG")
@@ -258,45 +263,38 @@ end
     obs=Array(transpose(coded_seqs))
     position_start=1;offsets=[0,0]
 
-    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 100, source_priors, mix_prior, bg_scores, obs, src_length_limits)
+    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 200, source_priors, mix_prior, bg_scores, obs, src_length_limits)
 
-    @test length(ensemble.models) == 100
+    @test length(ensemble.models) == 200
     for model in ensemble.models
-        @test -165 < model.log_Li < -100
+        @test -150 < model.log_Li < -30
     end
 
-    permute_limit = 400
+    permute_limit = 900
     param_set = [("permute",(100,50)),("merge",(100)),("permute",(500,3)),("init",(100))]
 
 
     @info "Spawning worker pool..."
-    librarians=addprocs(3)
-    worker_pool=addprocs(6)
+    librarians=addprocs(1)
+    worker_pool=addprocs(1)
     @everywhere using nnlearn,Random
     @everywhere Random.seed!(1)
     
-
     ####CONVERGE############
-    final_logZ = nnlearn.ns_converge!(ensemble, param_set, permute_limit, librarians, worker_pool, 3., true)
+    final_logZ = nnlearn.ns_converge!(ensemble, param_set, permute_limit, librarians, worker_pool, 25., false)
 
+    rmprocs(worker_pool)
+    rmprocs(librarians)
 
-    @test length(ensemble.models) == 100
-    @test length(ensemble.log_Li) == 995
+    @test length(ensemble.models) == 200
+    @test length(ensemble.log_Li) == length(ensemble.log_Xi) == length(ensemble.log_wi) == length(ensemble.log_Liwi) == length(ensemble.log_Zi) == length(ensemble.Hi) == ensemble.model_counter-200
     for i in 1:length(ensemble.log_Li)-1
         @test ensemble.log_Li[i] < ensemble.log_Li[i+1]
     end
-    @test length(ensemble.log_Xi) == 995
-    @test length(ensemble.log_wi) == 995
-    @test length(ensemble.log_Liwi) == 995
-    @test length(ensemble.log_Zi) == 995
     for i in 1:length(ensemble.log_Zi)-1
         @test ensemble.log_Zi[i] < ensemble.log_Zi[i+1]
     end
-    @test length(ensemble.Hi) == 995
-    @test length(ensemble.retained_posterior_samples) == 994
-    @test ensemble.model_counter==1095
-    @test isapprox(final_logZ,-18.986355698434917)
+    @test final_logZ > -104.0
 
-    serialize(string(ensembledir,'/',"ens"),ensemble)
-    # rm(ensembledir, recursive=true)
+    rm(ensembledir, recursive=true)
 end

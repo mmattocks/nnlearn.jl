@@ -53,7 +53,6 @@ end
 
 #LIKELIHOOD SCORING FUNCS
 function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::AbstractArray{Float64}, mix::BitMatrix, revcomp::Bool=true, returncache::Bool=false, cache::Vector{Float64}=zeros(0), clean::Vector{Bool}=Vector(falses(size(observations)[2])))
-    revcomp ? log_motif_expectation = log(0.5 / size(bg_scores)[1]) : log_motif_expectation = log(1 / size(bg_scores)[1])#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
     source_wmls=[size(source[1])[1] for source in sources]
     O = size(bg_scores)[2]
     obs_lhs=Vector{Vector{Float64}}()
@@ -72,6 +71,7 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observati
                 obs_lhs[t][i]=cache[o]
             else
                 obsl = obs_lengths[o]
+                revcomp ? log_motif_expectation = log(0.5/obsl) : log_motif_expectation = log(1/obsl)#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
                 mixview=view(mix,o,:)
                 mixwmls=source_wmls[mixview]
                 score_mat=score_obs_sources(sources[mixview], observations[1:obsl,o], obsl, mixwmls, revcomp=revcomp)

@@ -6,6 +6,8 @@ Functions to learn a metamotif model of nucleosome positions by nested sampling
 
 module nnlearn
     using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributed, Distributions, CLHMM, HMMBase, ProgressMeter, Serialization
+    import ProgressMeter: AbstractProgress
+    import Printf: @sprintf
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
     import Random: rand, seed!
 
@@ -76,5 +78,6 @@ module nnlearn
     include("Bayes_IPM_ensemble.jl")
     include("nested_sampler.jl")
     include("model_display.jl")
+    include("ns_progressmeter.jl")
     #include("performance.jl")
 end # module

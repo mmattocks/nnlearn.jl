@@ -21,6 +21,8 @@ mutable struct Bayes_IPM_ensemble
 	retained_posterior_samples::Vector{Model_Record} #list of posterior sample filenames
 
 	model_counter::Int64
+
+	naive_lh::Float64 #the likelihood of the background model without any sources
 end
 
 ####Bayes_IPM_ensemble FUNCTIONS
@@ -41,7 +43,8 @@ Bayes_IPM_ensemble(
 	bg_scores, #precalculated background score
 	posterior_switch,
 	Vector{String}(),
-	no_models+1)
+	no_models+1,
+	IPM_likelihood(init_logPWM_sources(source_priors, source_length_limits), obs, [findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]], bg_scores, falses(size(obs)[2],length(source_priors))))
 
 function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
 	ensemble_records = Vector{Model_Record}()
