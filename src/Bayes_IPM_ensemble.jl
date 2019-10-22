@@ -85,13 +85,13 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 		original = deepcopy(m)
 		for (mode, params) in param_set
 			if mode == "permute"
-				reset && m = deepcopy(original)
+				reset && (m = deepcopy(original))
 				permute_model!(m, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 			elseif mode == "merge"
-				reset && m = deepcopy(original)
+				reset && (m = deepcopy(original))
 				merge_model!(e.models, m, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 			elseif mode == "init"
-				reset && m = deepcopy(original)
+				reset && (m = deepcopy(original))
 				reinit_sources!(m, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
 				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
@@ -109,13 +109,13 @@ function worker_permute(librarian::Int64, e::Bayes_IPM_ensemble, iterate::Int64,
 	for i=1:permute_limit
 		for (mode, params) in param_set
 			if mode == "permute"
-				reset && job_model = deepcopy(original)
+				reset && (job_model = deepcopy(original))
 				permute_model!(job_model, e.model_counter, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 			elseif mode == "merge"
-				reset && job_model = deepcopy(original)
+				reset && (job_model = deepcopy(original))
 				merge_model!(librarian, e.models, job_model, e.model_counter, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 			elseif mode == "init"
-				reset && job_model = deepcopy(original)
+				reset && (job_model = deepcopy(original))
 				reinit_sources!(job_model, e.model_counter, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
 				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""

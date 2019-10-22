@@ -18,7 +18,7 @@ const source_length_range = source_min_bases:source_max_bases
 const mixing_prior = .1
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 5
-const permute_params = [("permute",(100,100)),("permute",(10,1000)),("merge",(no_sources*3)),("init",(100))]
+const permute_params = [("permute",(100,100)),("permute",(10,5000,[.8,.1,.1])),("merge",(no_sources*3)),("init",(100))]
 const prior_wt=3.0
 
 # using Distributed, Serialization
