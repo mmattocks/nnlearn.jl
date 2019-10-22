@@ -21,19 +21,19 @@ const models_to_permute = ensemble_size * 5
 const permute_params = [("permute",(100,100)),("permute",(10,5000,[.8,.1,.1])),("merge",(no_sources*3)),("init",(100))]
 const prior_wt=3.0
 
-# using Distributed, Serialization
+using Distributed, Serialization
 
-# @info "Adding librarians and workers..."
+@info "Adding librarians and workers..."
 # remote_machine = "10.0.0.2"
-# librarians=addprocs(1)
-# local_pool=addprocs(2)
+librarians=addprocs(1)
+local_pool=addprocs(2)
 # remote_pool=addprocs([(remote_machine, 1)], tunnel=true)
 # worker_pool=vcat(local_pool,remote_pool)
-
+worker_pool=local_pool
 
 @info "Loading libraries..."
-using nnlearn, Random, Serialization
-# @everywhere using nnlearn, Random
+# using nnlearn, Random, Serialization
+@everywhere using nnlearn, Random
 Random.seed!(786)
 
 @info "Loading BGHMM likelihood matrix binary..."
@@ -49,10 +49,11 @@ wm_priors = nnlearn.read_fa_wms_tr(prior_wms_path)
 source_priors = nnlearn.assemble_source_priors(no_sources, wm_priors, prior_wt, source_length_range)
 
 @info "Initialising ICA PWM model ensemble for nested sampling..."
-ensemble = nnlearn.Bayes_IPM_ensemble(ensemble_directory, ensemble_size, source_priors, mixing_prior, BGHMM_lh_matrix, coded_seqs, source_length_range)
+isfile(string(ensemble_directory,'/',"ens") ? (ensemble = deserialize(string(ensemble_directory,'/',"ens"))) :
+    (ensemble = nnlearn.Bayes_IPM_ensemble(ensemble_directory, ensemble_size, source_priors, mixing_prior, BGHMM_lh_matrix, coded_seqs, source_length_range))
 
 @info "Learning motifs by nested sampling of posterior..."
-# serialize(converged_sample, nnlearn.ns_converge!(ensemble, permute_params, models_to_permute, librarians, worker_pool))
-serialize(converged_sample, nnlearn.ns_converge!(ensemble, permute_params, models_to_permute))
+serialize(converged_sample, nnlearn.ns_converge!(ensemble, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5)))
+# serialize(converged_sample, nnlearn.ns_converge!(ensemble, permute_params, models_to_permute, backup=(true,5)))
 
 @info "Job done!"

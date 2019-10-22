@@ -98,7 +98,7 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan, param_set, permute_limi
     return 0
 end
 
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001, verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001; backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
     
@@ -113,6 +113,8 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 
         iterate += 1
 
+        backup[1] && iterate%backup[2] == 0 && serialize(string(e.ensemble_directory,'/',"ens"), e) #every backup interval, serialise the ensemble
+
         update!(meter, e.log_Li[end], findmax([model.log_Li for model in e.models])[1], CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], e.log_Zi[end])
 
         verbose && @info "Iterate: $iterate, contour: $(e.log_Li[end]), max ensemble likelihood: $(findmax([model.log_Li for model in e.models])[1]), convergence val: $(CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end])), covergence criterion: $(CLHMM.lps(log_frac,e.log_Zi[end])), log_Xi:$(e.log_Xi[end]), log_wt:$(e.log_wi[end]), log_liwi:$(e.log_Liwi[end]), log_Z:$(e.log_Zi[end]), H:$(e.Hi[end])"
@@ -126,7 +128,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 end
 
     
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001, verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
     model_chan= RemoteChannel(()->Channel{Tuple{ICA_PWM_model,Int64}}(length(worker_pool))) #channel to take EM iterates off of
@@ -140,6 +142,8 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
                 (@error "All workers failed to find new models, aborting at current iterate."; return e) #if there is a warning, iust return the ensemble and print info
 
         iterate += 1
+
+        backup[1] && iterate%backup[2] == 0 && serialize(string(e.ensemble_directory,'/',"ens"), e) #every backup interval, serialise the ensemble
 
         update!(meter, e.log_Li[end], findmax([model.log_Li for model in e.models])[1], CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]), log(evidence_fraction * exp(e.log_Zi[end])), e.Hi[end], e.log_Zi[end])
 

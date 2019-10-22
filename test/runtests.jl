@@ -302,7 +302,7 @@ end
     @everywhere Random.seed!(1)
     
     ####CONVERGE############
-    final_logZ = nnlearn.ns_converge!(ensemble, param_set, permute_limit, librarians, worker_pool, 25.)
+    final_logZ = nnlearn.ns_converge!(ensemble, param_set, permute_limit, librarians, worker_pool, 25., backup=(true,250))
 
     rmprocs(worker_pool)
     rmprocs(librarians)
