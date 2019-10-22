@@ -62,8 +62,7 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observati
     end
     push!(obs_lhs, zeros(Int(floor(O/nt)+(O%nt))))
     
-    #Threads.@threads 
-    for t in 1:nt
+    Threads.@threads for t in 1:nt
         opt = floor(O/nt) #obs per thread
         for i in 1:Int(opt+(t==nt)*(O%nt))
             o=Int(i+(t-1)*opt)
