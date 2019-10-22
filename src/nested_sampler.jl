@@ -113,9 +113,9 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 
         iterate += 1
 
-        update!(meter, e.log_Li[end], findmax([model.log_Li for model in e.models])[1], CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]), log(evidence_fraction * exp(e.log_Zi[end])), e.Hi[end], e.log_Zi[end])
+        update!(meter, e.log_Li[end], findmax([model.log_Li for model in e.models])[1], CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], e.log_Zi[end])
 
-        verbose && @info "Iterate: $iterate, contour: $(e.log_Li[end]), max ensemble likelihood: $(findmax([model.log_Li for model in e.models])[1]), convergence val: $(CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end])), covergence criterion: $(log(evidence_fraction * exp(e.log_Zi[end]))), log_Xi:$(e.log_Xi[end]), log_wt:$(e.log_wi[end]), log_liwi:$(e.log_Liwi[end]), log_Z:$(e.log_Zi[end]), H:$(e.Hi[end])"
+        verbose && @info "Iterate: $iterate, contour: $(e.log_Li[end]), max ensemble likelihood: $(findmax([model.log_Li for model in e.models])[1]), convergence val: $(CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end])), covergence criterion: $(CLHMM.lps(log_frac,e.log_Zi[end])), log_Xi:$(e.log_Xi[end]), log_wt:$(e.log_wi[end]), log_liwi:$(e.log_Liwi[end]), log_Z:$(e.log_Zi[end]), H:$(e.Hi[end])"
     end
 
     final_logZ = logsumexp([model.log_Li for model in e.models]) +  e.log_Xi[length(e.log_Li)] - log(1/length(e.models))
