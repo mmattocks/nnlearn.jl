@@ -281,7 +281,6 @@ end
     param_set = [("permute",(100,50)),("merge",(100)),("permute",(500,3)),("init",(100))]
 
     @info "Testing threaded convergence..."
-    @info "Spawning worker pool..."
     sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 25.)
 
     @test length(sp_ensemble.models) == 200

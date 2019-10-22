@@ -53,9 +53,15 @@ function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_prio
 	@assert size(obs)[2]==size(bg_scores)[2]
 
 	@showprogress 1 "Assembling ICA PWM model ensemble..." for model_no in 1:no_models
-		model = ICA_PWM_model(string(model_no), source_priors, mix_prior, bg_scores, obs, source_length_limits)
-		serialize(string(ensemble_directory,'/',model_no), model) #save the model to the ensemble directory
-		push!(ensemble_records, Model_Record(string(ensemble_directory,'/',model_no),model.log_likelihood))
+		model_path = string(ensemble_directory,'/',model_no)
+		if !isfile(model_path)
+			model = ICA_PWM_model(string(model_no), source_priors, mix_prior, bg_scores, obs, source_length_limits)
+			serialize(model_path, model) #save the model to the ensemble directory
+			push!(ensemble_records, Model_Record(model_path,model.log_likelihood))
+		else #interrupted assembly pick up from where we left off
+			model = deserialize(model_path)
+			push!(ensemble_records, Model_Record(model_path,model.log_likelihood))
+		end
 	end
 
 	return ensemble_records

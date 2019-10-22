@@ -1,3 +1,4 @@
+@info "Setting up for job..."
 #JOB FILEPATHS
 prior_wms_path = "/bench/PhD/NGS_binaries/nnlearn/sib_nuc_position_sequences.fa_wms.tr"
 code_binary = "/bench/PhD/NGS_binaries/nnlearn/coded_obs_set"
@@ -17,12 +18,22 @@ const source_length_range = source_min_bases:source_max_bases
 const mixing_prior = .1
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 5
-const permute_params = [("permute",(50,100000)),("permute",(1000,100)),("merge",(no_sources*3)),("init",(100))]
+const permute_params = [("permute",(25,10000)),("permute",(1000,100)),("merge",(no_sources*3)),("init",(100))]
 const prior_wt=3.0
+
+# using Distributed, Serialization
+
+# @info "Adding librarians and workers..."
+# remote_machine = "10.0.0.2"
+# librarians=addprocs(1)
+# local_pool=addprocs(2)
+# remote_pool=addprocs([(remote_machine, 1)], tunnel=true)
+# worker_pool=vcat(local_pool,remote_pool)
+
 
 @info "Loading libraries..."
 using nnlearn, Random, Serialization
-
+# @everywhere using nnlearn, Random
 Random.seed!(786)
 
 @info "Loading BGHMM likelihood matrix binary..."
@@ -40,6 +51,8 @@ source_priors = nnlearn.assemble_source_priors(no_sources, wm_priors, prior_wt, 
 @info "Initialising ICA PWM model ensemble for nested sampling..."
 ensemble = nnlearn.Bayes_IPM_ensemble(ensemble_directory, ensemble_size, source_priors, mixing_prior, BGHMM_lh_matrix, coded_seqs, source_length_range)
 
+@info "Learning motifs by nested sampling of posterior..."
+# serialize(converged_sample, nnlearn.ns_converge!(ensemble, permute_params, models_to_permute, librarians, worker_pool))
 serialize(converged_sample, nnlearn.ns_converge!(ensemble, permute_params, models_to_permute))
 
 @info "Job done!"
