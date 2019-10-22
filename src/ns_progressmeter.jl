@@ -94,5 +94,6 @@ end
                 function hmss(dt)
                     (h,r) = divrem(dt,60*60)
                     (m,r) = divrem(r, 60)
+                    h === NaN || m === NaN || r === NaN && return "NaN"
                     string(Int(h),":",Int(m),":",Int(ceil(r)))
                 end
