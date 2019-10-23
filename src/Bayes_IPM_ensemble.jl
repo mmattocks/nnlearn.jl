@@ -113,7 +113,7 @@ function worker_permute(librarian::Int64, job_chan::RemoteChannel, models_chan::
 
 		for i=1:permute_limit
 			m_record = rand(e.models)
-			m = deserialize(m_record.path)
+			m = remotecall_fetch(deserialize,librarian,m_record.path)
 			original = deepcopy(m)
 
 			for (mode, params) in param_set

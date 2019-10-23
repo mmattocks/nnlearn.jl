@@ -2,6 +2,7 @@
 mutable struct ProgressNS{T<:Real} <: AbstractProgress
     interval::T
     dt::Float64
+    start_it::Int
     counter::Int
     triggered::Bool
     tfirst::Float64
@@ -29,7 +30,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                start_it::Int=1) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(interval, dt, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0, 0.0,naive)
+        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0, 0.0,naive)
     end
 end
 
@@ -44,7 +45,7 @@ function update!(p::ProgressNS, contour, max,  val, thresh, info, logz; options.
     p.max_lh = max
     interval = val - thresh
     step=p.interval-interval
-    step_time=(time()-p.tfirst)/p.counter
+    step_time=(time()-p.tfirst)/(p.counter-p.start_it)
     p.etc= (interval/step)*step_time
     p.interval=interval
     p.information = info

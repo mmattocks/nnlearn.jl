@@ -208,11 +208,11 @@ end
     @test test_model.log_likelihood == lh_target
     
     permuted_model = deepcopy(test_model)
-    nnlearn.permute_model!(permuted_model, 1, lh_target, obs, obsl, bg_scores, source_priors, 5)
+    nnlearn.permute_model!(permuted_model, lh_target, obs, obsl, bg_scores, source_priors, 5)
     @test permuted_model.log_likelihood > test_model.log_likelihood
 
     reinit_model = deepcopy(test_model)
-    nnlearn.reinit_sources!(reinit_model, 1, lh_target, obs, obsl, bg_scores, source_priors, mix_prior, 500)
+    nnlearn.reinit_sources!(reinit_model, lh_target, obs, obsl, bg_scores, source_priors, mix_prior, 500)
     @test reinit_model.log_likelihood > test_model.log_likelihood
 
     uninform_priors = nnlearn.assemble_source_priors(3, Vector{Matrix{Float64}}(), 4.0, src_length_limits)
@@ -223,7 +223,7 @@ end
     test_record = nnlearn.Model_Record(path, test_model.log_likelihood)
     serialize(path, test_model)
 
-    nnlearn.merge_model!(1,[test_record],ui_model,1,merge_target,obs,obsl,bg_scores,500)
+    nnlearn.merge_model!(1,[test_record],ui_model,merge_target,obs,obsl,bg_scores,500)
 
     @test ui_model.log_likelihood > merge_target
 
