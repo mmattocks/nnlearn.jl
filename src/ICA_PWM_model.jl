@@ -7,10 +7,10 @@ mutable struct ICA_PWM_model
 end
 
 #ICA_PWM_model FUNCTIONS
-ICA_PWM_model(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::AbstractArray{Float64}, observations::AbstractArray{Int64}, source_length_limits::UnitRange{Int64}) = init_IPM(name, source_priors,mix_prior,bg_scores,observations,source_length_limits)
+ICA_PWM_model(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, observations::AbstractArray{Int64}, source_length_limits::UnitRange{Int64}) = init_IPM(name, source_priors,mix_prior,bg_scores,observations,source_length_limits)
 
 #MODEL INIT
-function init_IPM(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::AbstractArray{Float64}, observations::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
+function init_IPM(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, observations::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
     T,O = size(observations)
     S=length(source_priors)
     obs_lengths=[findfirst(iszero,observations[:,o])-1 for o in 1:size(observations)[2]]
@@ -42,11 +42,16 @@ end
                     return srcvec
                 end
 
-                function init_mixing_matrix(mix_prior::Float64, no_observations::Int64, no_sources::Int64)
-                    @assert 0.0 <= mix_prior <=1.0
+                function init_mixing_matrix(mix_prior::Tuple{BitMatrix,Float64}, no_observations::Int64, no_sources::Int64)
+                    inform,uninform=mix_prior
+                    @assert 0.0 <= uninform <=1.0
                     mix_matrix = falses(no_observations, no_sources)
-                    for index in eachindex(mix_matrix)
-                        rand() <= mix_prior && (mix_matrix[index] = true)
+                    if size(inform,1)>0
+                        mix_matrix[1:size(inform,1),1:size(inform,2)]=inform
+                    end
+
+                    for index in eachindex(mix_matrix[size(inform,1)+1:end,size(inform,2)+1:end])
+                        rand() <= uninform && (mix_matrix[index] = true)
                     end
                     return mix_matrix
                 end
@@ -313,7 +318,7 @@ function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m:
 end
 
 #iterative source reinitialisation from priors
-function reinit_sources!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, iterates::Int64)
+function reinit_sources!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, iterates::Int64)
     m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)

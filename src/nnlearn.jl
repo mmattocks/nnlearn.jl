@@ -16,34 +16,17 @@ module nnlearn
         log_Li::Float64
     end
 
-    function make_position_df(position_fasta::String)
-        position_reader = BioSequences.FASTA.Reader(open((position_fasta),"r"))
-        position_df = DataFrame(SeqID = String[], Start=Int64[], End=Int64[], Seq = DNASequence[])
-    
-        for entry in position_reader
-            scaffold = BioSequences.FASTA.identifier(entry)
-    
-            if scaffold != "MT"
-                desc_array = split(BioSequences.FASTA.description(entry))
-                pos_start = parse(Int64, desc_array[2])
-                pos_end = parse(Int64, desc_array[4])
-                seq = BioSequences.FASTA.sequence(entry)
-    
-                if !hasambiguity(seq)
-                    push!(position_df, [scaffold, pos_start, pos_end, seq])
-                end
-            end
+    function read_fa_wms_tr(path::String)
+        wms=Vector{Matrix{Float64}}()
+        wm=zeros(1,4)
+        f=open(path)
+        for line in eachline(f)
+            prefix=line[1:2]
+            prefix == "01" && (wm=transpose([parse(Float64,i) for i in split(line)[2:end]]))
+            prefix != "01" && prefix != "NA" && prefix != "PO" && prefix != "//" && (wm=vcat(wm, transpose([parse(Float64,i) for i in split(line)[2:end]])))
+            prefix == "//" && push!(wms, wm)
         end
-        
-        close(position_reader)
-        return position_df
-    end
-
-    function observation_setup(position_df::DataFrame; order::Int64=0)
-        order_seqs = BGHMM.get_order_n_seqs(position_df.Seq, order)
-        coded_seqs = BGHMM.code_seqs(order_seqs)
-
-        return coded_seqs
+        return wms
     end
 
     #wm_samples are in decimal probability space, not log space
@@ -74,18 +57,17 @@ module nnlearn
                     return prior
                 end
 
-    function read_fa_wms_tr(path::String)
-        wms=Vector{Matrix{Float64}}()
-        wm=zeros(1,4)
-        f=open(path)
-        for line in eachline(f)
-            prefix=line[1:2]
-            prefix == "01" && (wm=transpose([parse(Float64,i) for i in split(line)[2:end]]))
-            prefix != "01" && prefix != "NA" && prefix != "PO" && prefix != "//" && (wm=vcat(wm, transpose([parse(Float64,i) for i in split(line)[2:end]])))
-            prefix == "//" && push!(wms, wm)
+    function cluster_mix_prior!(df::DataFrame, wms::Vector{Matrix})
+        mix=falses(size(df,1),length(wms))
+        for (o, row) in enuemrate(eachrow(df))
+            row.cluster != 0 && (mix[o,row.cluster]=true)
         end
-        return wms
+        
+        represented_sources=unique(df.cluster)
+        wms=wms[represented_sources]
+        return mix[:,represented_sources]
     end
+            
 
     include("ICA_PWM_model.jl")
     include("Bayes_IPM_ensemble.jl")

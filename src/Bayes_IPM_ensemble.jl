@@ -13,7 +13,7 @@ mutable struct Bayes_IPM_ensemble
 	obs_lengths::Vector{Int64}
 
 	source_priors::Vector{Vector{Dirichlet{Float64}}} #source pwm priors
-	mix_prior::Float64 #prior on %age of observations that any given source contributes to
+	mix_prior::Tuple{BitMatrix,Float64} #prior on %age of observations that any given source contributes to
 
 	bg_scores::Matrix{Float64} #precalculated background HMM scores
 
@@ -26,7 +26,7 @@ mutable struct Bayes_IPM_ensemble
 end
 
 ####Bayes_IPM_ensemble FUNCTIONS
-Bayes_IPM_ensemble(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::Matrix{Float64}, obs::Array{Int64}, source_length_limits; posterior_switch::Bool=true) =
+Bayes_IPM_ensemble(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::Matrix{Float64}, obs::Array{Int64}, source_length_limits; posterior_switch::Bool=true) =
 Bayes_IPM_ensemble(
 	ensemble_directory,
 	assemble_IPMs(ensemble_directory, no_models, source_priors, mix_prior, bg_scores, obs, source_length_limits),
@@ -46,13 +46,33 @@ Bayes_IPM_ensemble(
 	no_models+1,
 	IPM_likelihood(init_logPWM_sources(source_priors, source_length_limits), obs, [findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]], bg_scores, falses(size(obs)[2],length(source_priors))))
 
-function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Float64, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
+Bayes_IPM_ensemble(worker_pool::Vector{Int64}, ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::Matrix{Float64}, obs::Array{Int64}, source_length_limits; posterior_switch::Bool=true) =
+Bayes_IPM_ensemble(
+	ensemble_directory,
+	distributed_IPM_assembly(worker_pool, ensemble_directory, no_models, source_priors, mix_prior, bg_scores, obs, source_length_limits),
+	[-Inf], #L0 = 0
+	[0], #ie exp(0) = all of the prior is covered
+	[-Inf], #w0 = 0
+	[-Inf], #Liwi0 = 0
+	[-1e300], #Z0 = 0
+	[0], #H0 = 0,
+	obs,
+	[findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]],
+	source_priors,
+	mix_prior,
+	bg_scores, #precalculated background score
+	posterior_switch,
+	Vector{String}(),
+	no_models+1,
+	IPM_likelihood(init_logPWM_sources(source_priors, source_length_limits), obs, [findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]], bg_scores, falses(size(obs)[2],length(source_priors))))
+
+function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
 	ensemble_records = Vector{Model_Record}()
 	!isdir(ensemble_directory) && mkpath(ensemble_directory)
 
 	@assert size(obs)[2]==size(bg_scores)[2]
 
-	@showprogress 1 "Assembling ICA PWM model ensemble..." for model_no in 1:no_models
+	for model_no in 1:no_models
 		model_path = string(ensemble_directory,'/',model_no)
 		if !isfile(model_path)
 			model = ICA_PWM_model(string(model_no), source_priors, mix_prior, bg_scores, obs, source_length_limits)
@@ -66,6 +86,63 @@ function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_prio
 
 	return ensemble_records
 end
+
+function distributed_IPM_assembly(worker_pool::Vector{Int64}, ensemble_directory::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
+	ensemble_records = Vector{Model_Record}()
+	!isdir(ensemble_directory) && mkpath(ensemble_directory)
+
+	@assert size(obs)[2]==size(bg_scores)[2]
+
+    model_chan= RemoteChannel(()->Channel{ICA_PWM_model}(length(worker_pool)))
+    job_chan = RemoteChannel(()->Channel{Union{Tuple,Nothing}}(1))
+	put!(job_chan,(source_priors, mix_prior, bg_scores, obs, source_length_limits))
+	
+    for worker in worker_pool
+        remote_do(worker_assemble, worker, job_chan, model_chan)
+    end
+
+	model_counter=check_assembly!(ensemble_records, ensemble_directory, no_models)
+
+	while model_counter <= no_models
+		wait(model_chan)
+		model=take!(model_chan)
+		model.name=string(model_counter)
+		model_path=string(ensemble_directory,'/',model_counter)
+		serialize(model_path,model)
+		push!(ensemble_records, Model_Record(model_path,model.log_likelihood))
+		model_counter+=1
+	end
+
+	take!(job_chan),put!(job_chan,nothing)
+
+	return ensemble_records
+end
+				function check_assembly!(ensemble_records::Vector{Model_Record}, ensemble_directory::String, no_models::Int64)
+					counter=1
+					while counter <= no_models
+						model_path=string(ensemble_directory,'/',counter)
+						if isfile(model_path)
+							model=deserialize(model_path)
+							push!(ensemble_records, Model_Record(model_path,model.log_likelihood))
+							counter+=1
+						else
+							return counter
+						end
+					end
+					return counter
+				end
+
+				function worker_assemble(job_chan::RemoteChannel, models_chan::RemoteChannel)
+					persist=true
+					while persist
+						wait(job_chan)
+						params=fetch(job_chan)
+						params===nothing && (persist=false; break)
+						model=ICA_PWM_model(string(myid()),params...)
+						put!(models_chan,model)
+					end
+				end
+
 
 #permutation routine function- 
 #general logic: receive array of permutation parameters, until a model more likely than the least is found:
@@ -101,7 +178,6 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 	end
 	return nothing
 end
-
 
 function worker_permute(librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; reset=true)
 	persist=true

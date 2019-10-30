@@ -36,7 +36,7 @@ O=1000;S=50
         end
     end
 
-    test_mix=nnlearn.init_mixing_matrix(0.5, 2, 10)
+    test_mix=nnlearn.init_mixing_matrix((falses(0,0),0.5), 2, 10)
 
     permuted_weight_sources=deepcopy(test_sources)
     clean = Vector{Bool}(trues(2))
@@ -59,9 +59,12 @@ end
 
 @testset "Mix matrix initialisation and manipulation functions" begin
     #test mix matrix init
-    @test sum(nnlearn.init_mixing_matrix(1.0, O, S)) == O*S
-    @test sum(nnlearn.init_mixing_matrix(0.0, O, S)) == 0
-    @test 0 < sum(nnlearn.init_mixing_matrix(0.5, O, S)) < O*S
+
+    @test all(nnlearn.init_mixing_matrix((trues(2,10),0.5),2, 10))
+
+    @test sum(nnlearn.init_mixing_matrix((falses(0,0),1.0), O, S)) == O*S
+    @test sum(nnlearn.init_mixing_matrix((falses(0,0),0.0), O, S)) == 0
+    @test 0 < sum(nnlearn.init_mixing_matrix((falses(0,0),0.5), O, S)) < O*S
 
     #test mix matrix decorrelation
     empty_mix = falses(O,S)
@@ -195,7 +198,7 @@ end
     obs=Array(transpose(coded_seqs))
     obsl=[findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]]
 
-    test_model = nnlearn.ICA_PWM_model("test", source_priors, mix_prior, bg_scores, obs, src_length_limits)
+    test_model = nnlearn.ICA_PWM_model("test", source_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits)
     
     sources_target::Vector{Tuple{Matrix{Float64},Int64}} = [([-3.71415 -5.82712 -2.38886 -0.126762; -0.834566 -2.06535 -0.852383 -4.361], 2), ([-0.846903 -1.70222 -1.18194 -2.49741; -1.1486 -2.79613 -1.3878 -0.988191; -6.14759 -3.3357 -0.218022 -1.84412], 1), ([-8.17558 -0.0620875 -3.19203 -3.97233; -3.47489 -3.52956 -1.42089 -0.359224], 1)]
     mix_target = trues(2,3)
@@ -212,11 +215,11 @@ end
     @test permuted_model.log_likelihood > test_model.log_likelihood
 
     reinit_model = deepcopy(test_model)
-    nnlearn.reinit_sources!(reinit_model, lh_target, obs, obsl, bg_scores, source_priors, mix_prior, 500)
+    nnlearn.reinit_sources!(reinit_model, lh_target, obs, obsl, bg_scores, source_priors, (falses(0,0),mix_prior), 500)
     @test reinit_model.log_likelihood > test_model.log_likelihood
 
     uninform_priors = nnlearn.assemble_source_priors(3, Vector{Matrix{Float64}}(), 4.0, src_length_limits)
-    ui_model = nnlearn.ICA_PWM_model("ui", uninform_priors, mix_prior, bg_scores, obs, src_length_limits)
+    ui_model = nnlearn.ICA_PWM_model("ui", uninform_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits)
     merge_target = ui_model.log_likelihood
 
     path=randstring()
@@ -233,6 +236,7 @@ end
 @testset "Ensemble assembly and nested sampling functions" begin
     ensembledir = randstring()
     spensembledir = randstring()
+    distdir = randstring()
 
     source_pwm = [.7 .1 .1 .1
     .1 .1 .1 .7
@@ -264,8 +268,10 @@ end
     obs=Array(transpose(coded_seqs))
     position_start=1;offsets=[0,0]
 
-    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 200, source_priors, mix_prior, bg_scores, obs, src_length_limits)
-    sp_ensemble = nnlearn.Bayes_IPM_ensemble(spensembledir, 200, source_priors, mix_prior, bg_scores, obs, src_length_limits)
+    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 150, source_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits)
+    ensemble = nnlearn.Bayes_IPM_ensemble(ensembledir, 200, source_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits) #test resumption
+
+    sp_ensemble = nnlearn.Bayes_IPM_ensemble(spensembledir, 200, source_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits)
 
     @test length(ensemble.models) == 200
     for model in ensemble.models
@@ -276,6 +282,21 @@ end
     for model in sp_ensemble.models
         @test -150 < model.log_Li < -25
     end
+
+    assembler=addprocs(1)
+
+    @everywhere using nnlearn
+
+    dist_ensemble=nnlearn.Bayes_IPM_ensemble(assembler, distdir, 150, source_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits)
+    dist_ensemble=nnlearn.Bayes_IPM_ensemble(assembler, distdir, 200, source_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits) #test resumption
+
+    @test length(dist_ensemble.models) == 200
+    for model in ensemble.models
+        @test -150 < model.log_Li < -25
+    end
+
+    rmprocs(assembler)
+    rm(distdir, recursive=true)
 
     permute_limit = 900
     param_set = [("permute",(100,50)),("merge",(100)),("permute",(500,3)),("init",(100))]
