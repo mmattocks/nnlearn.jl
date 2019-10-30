@@ -59,7 +59,7 @@ module nnlearn
 
     function cluster_mix_prior!(df::DataFrame, wms::Vector{Matrix{Float64}})
         mix=falses(size(df,1),length(wms))
-        for (o, row) in enuemrate(eachrow(df))
+        for (o, row) in enumerate(eachrow(df))
             row.cluster != 0 && (mix[o,row.cluster]=true)
         end
         
