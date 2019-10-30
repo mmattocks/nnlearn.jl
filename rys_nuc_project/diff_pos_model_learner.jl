@@ -64,8 +64,8 @@ sib_wms = nnlearn.read_fa_wms_tr(sib_wms_path)
 rys_wms = nnlearn.read_fa_wms_tr(rys_wms_path)
 
 @info "Assembling source priors..."
-sib_mix_prior = nnlearn.cluster_mix_prior!(sib_df_binary, sib_wms)
-rys_mix_prior = nnlearn.cluster_mix_prior!(rys_df_binary, rys_wms)
+sib_mix_prior = nnlearn.cluster_mix_prior!(deserialize(sib_df_binary), sib_wms)
+rys_mix_prior = nnlearn.cluster_mix_prior!(deserialize(rys_df_binary), rys_wms)
 combined_mix_prior = vcat(sib_mix_prior,rys_mix_prior)
 
 sib_source_priors = nnlearn.assemble_source_priors(no_sources, sib_wms, prior_wt, source_length_range)
