@@ -19,6 +19,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     contour::Float64
     max_lh::Float64
     naive::Float64
+    stepworker::Int64
 
     function ProgressNS{T}(    naive::Float64,
                                interval::T;
@@ -30,7 +31,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                start_it::Int=1) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0, 0.0,naive)
+        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0, 0.0,naive,0)
     end
 end
 
@@ -40,7 +41,7 @@ ProgressNS(naive::Float64, interval::Real, dt::Real=0.1, desc::AbstractString="N
 
 ProgressNS(naive::Float64, interval::Real, desc::AbstractString, offset::Integer=0, start_it::Integer=1) = ProgressNS{typeof(interval)}(naive, interval, desc=desc, offset=offset, start_it=start_it)
 
-function update!(p::ProgressNS, contour, max,  val, thresh, info, logz; options...)
+function update!(p::ProgressNS, contour, max,  val, thresh, info, logz, worker; options...)
     p.contour = contour
     p.max_lh = max
     interval = val - thresh
@@ -51,6 +52,7 @@ function update!(p::ProgressNS, contour, max,  val, thresh, info, logz; options.
     p.information = info
     p.evidence = logz
     p.counter += 1
+    p.stepworker = worker
     updateProgress!(p; options...)
 end
 
@@ -78,7 +80,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
-        msg = @sprintf "%s (Step %i:: Contour: %g MELH: %g NLR: %g logZ: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.contour p.max_lh (p.max_lh-p.naive) p.evidence p.information p.interval hmss(p.etc)
+        msg = @sprintf "%s (Step %i::Wk:%g Contour: %g MELH: %g NLR: %g logZ: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker p.contour p.max_lh (p.max_lh-p.naive) p.evidence p.information p.interval hmss(p.etc)
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         ProgressMeter.printover(p.output, msg, p.color)

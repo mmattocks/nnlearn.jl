@@ -185,9 +185,11 @@ end
 
 function worker_permute(librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; reset=true)
 	persist=true
+	id=myid()
 	while persist
 		wait(job_chan)
 		e = fetch(job_chan)
+		e === nothing && (persist=false) && break
 		contour, ll_idx = findmin([model.log_Li for model in e.models])
 		deleteat!(e.models, ll_idx)
 
@@ -209,7 +211,7 @@ function worker_permute(librarian::Int64, job_chan::RemoteChannel, models_chan::
 				else
 					@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
 				end
-				job_model.log_likelihood > contour && (put!(models_chan, job_model); break; break)
+				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id)); break; break)
 			end
 		i==permute_limit && (put!(models_chan,nothing);persist=false)#worker to put nothing on channel if it fails to find a model more likely than contour
 		end

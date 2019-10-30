@@ -23,7 +23,7 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 1000
+const ensemble_size = 2500
 const no_sources = 50
 const source_min_bases = 3
 const source_max_bases = Int(ceil(position_size/2))
@@ -77,26 +77,30 @@ rys_source_priors = nnlearn.assemble_source_priors(no_sources, rys_wms, prior_wt
 combined_source_priors = deepcopy(sib_source_priors)
 combined_source_priors[ss+1:ss+rs]=rys_source_priors[1:rs]
 
-@info "Initialising ICA PWM model ensembles for nested sampling..."
+@info "Initialising sib ICA PWM model ensemble for nested sampling..."
 isfile(string(sib_ensemble,'/',"ens")) ? (sib_e = deserialize(string(sib_ensemble,'/',"ens"))) :
     (sib_e = nnlearn.Bayes_IPM_ensemble(worker_pool, sib_ensemble, ensemble_size, sib_source_priors, ( sib_mix_prior, mixing_prior), sib_matrix, sib_obs, source_length_range))
-
-isfile(string(rys_ensemble,'/',"ens")) ? (rys_e = deserialize(string(rys_ensemble,'/',"ens"))) :
-    (rys_e = nnlearn.Bayes_IPM_ensemble(worker_pool, rys_ensemble, ensemble_size, rys_source_priors, (rys_mix_prior, mixing_prior), rys_matrix, rys_obs, source_length_range))
-
-isfile(string(combined_ensemble,'/',"ens")) ? (combined_e = deserialize(string(combined_ensemble,'/',"ens"))) :
-    (combined_e = nnlearn.Bayes_IPM_ensemble(worker_pool, combined_ensemble, ensemble_size, combined_source_priors, (combined_mix_prior, mixing_prior), combined_matrix, combined_obs, source_length_range))
 
 @info "Learning differential sib motifs by nested sampling of posterior..."
 nnlearn.ns_converge!(sib_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
 serialize(string(sib_ensemble,'/',"ens"), sib_e)
 
+@info "Initialising rys ICA PWM model ensemble for nested sampling..."
+isfile(string(rys_ensemble,'/',"ens")) ? (rys_e = deserialize(string(rys_ensemble,'/',"ens"))) :
+    (rys_e = nnlearn.Bayes_IPM_ensemble(worker_pool, rys_ensemble, ensemble_size, rys_source_priors, (rys_mix_prior, mixing_prior), rys_matrix, rys_obs, source_length_range))
+
 @info "Learning differential rys motifs by nested sampling of posterior..."
 nnlearn.ns_converge!(rys_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
 serialize(string(rys_ensemble,'/',"ens"), rys_e)
 
-@info "Learning differential rys motifs by nested sampling of posterior..."
+@info "Initialising combined ICA PWM model ensemble for nested sampling..."
+isfile(string(combined_ensemble,'/',"ens")) ? (combined_e = deserialize(string(combined_ensemble,'/',"ens"))) :
+    (combined_e = nnlearn.Bayes_IPM_ensemble(worker_pool, combined_ensemble, ensemble_size, combined_source_priors, (combined_mix_prior, mixing_prior), combined_matrix, combined_obs, source_length_range))
+
+@info "Learning combined motifs by nested sampling of posterior..."
 nnlearn.ns_converge!(combined_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
 serialize(string(combined_ensemble,'/',"ens"), combined_e)
+
+rm(worker_pool)
 
 @info "Job done!"
