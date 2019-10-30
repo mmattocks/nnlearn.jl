@@ -72,7 +72,7 @@ function assemble_IPMs(ensemble_directory::String, no_models::Int64, source_prio
 
 	@assert size(obs)[2]==size(bg_scores)[2]
 
-	for model_no in 1:no_models
+	@showprogress 1 "Assembling IPM ensemble..." for model_no in 1:no_models
 		model_path = string(ensemble_directory,'/',model_no)
 		if !isfile(model_path)
 			model = ICA_PWM_model(string(model_no), source_priors, mix_prior, bg_scores, obs, source_length_limits)
@@ -99,9 +99,11 @@ function distributed_IPM_assembly(worker_pool::Vector{Int64}, ensemble_directory
 	
     for worker in worker_pool
         remote_do(worker_assemble, worker, job_chan, model_chan)
-    end
+	end
+	
+	assembly_progress=Progress(no_models, desc="Assembling IPM ensemble...")
 
-	model_counter=check_assembly!(ensemble_records, ensemble_directory, no_models)
+	model_counter=check_assembly!(ensemble_records, ensemble_directory, no_models, assembly_progress)
 
 	while model_counter <= no_models
 		wait(model_chan)
@@ -111,13 +113,14 @@ function distributed_IPM_assembly(worker_pool::Vector{Int64}, ensemble_directory
 		serialize(model_path,model)
 		push!(ensemble_records, Model_Record(model_path,model.log_likelihood))
 		model_counter+=1
+		next!(assembly_progress)
 	end
 
 	take!(job_chan),put!(job_chan,nothing)
 
 	return ensemble_records
 end
-				function check_assembly!(ensemble_records::Vector{Model_Record}, ensemble_directory::String, no_models::Int64)
+				function check_assembly!(ensemble_records::Vector{Model_Record}, ensemble_directory::String, no_models::Int64, assembly_progress::Progress)
 					counter=1
 					while counter <= no_models
 						model_path=string(ensemble_directory,'/',counter)
@@ -125,6 +128,7 @@ end
 							model=deserialize(model_path)
 							push!(ensemble_records, Model_Record(model_path,model.log_likelihood))
 							counter+=1
+							next!(assembly_progress)
 						else
 							return counter
 						end

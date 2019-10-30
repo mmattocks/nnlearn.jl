@@ -66,22 +66,26 @@ rys_wms = nnlearn.read_fa_wms_tr(rys_wms_path)
 @info "Assembling source priors..."
 sib_mix_prior = nnlearn.cluster_mix_prior!(deserialize(sib_df_binary), sib_wms)
 rys_mix_prior = nnlearn.cluster_mix_prior!(deserialize(rys_df_binary), rys_wms)
-combined_mix_prior = vcat(sib_mix_prior,rys_mix_prior)
+so,ss=size(sib_mix_prior)
+ro,rs=size(rys_mix_prior)
+combined_mix_prior = falses(so+ro,ss+rs)
+combined_mix_prior[1:so,1:ss] = sib_mix_prior
+combined_mix_prior[so+1:so+ro,ss+1:ss+rs] = rys_mix_prior
 
 sib_source_priors = nnlearn.assemble_source_priors(no_sources, sib_wms, prior_wt, source_length_range)
 rys_source_priors = nnlearn.assemble_source_priors(no_sources, rys_wms, prior_wt, source_length_range)
 combined_source_priors = deepcopy(sib_source_priors)
-combined_source_priors[length(sib_wms)+1:length(sib_wms)+length(rys_wms)]=rys_source_priors[1:length(rys_wms)]
+combined_source_priors[ss+1:ss+rs]=rys_source_priors[1:rs]
 
 @info "Initialising ICA PWM model ensembles for nested sampling..."
 isfile(string(sib_ensemble,'/',"ens")) ? (sib_e = deserialize(string(sib_ensemble,'/',"ens"))) :
-    (sib_e = nnlearn.Bayes_IPM_ensemble(sib_ensemble, ensemble_size, sib_source_priors, ( sib_mix_prior, mixing_prior), sib_matrix, sib_obs, source_length_range))
+    (sib_e = nnlearn.Bayes_IPM_ensemble(worker_pool, sib_ensemble, ensemble_size, sib_source_priors, ( sib_mix_prior, mixing_prior), sib_matrix, sib_obs, source_length_range))
 
 isfile(string(rys_ensemble,'/',"ens")) ? (rys_e = deserialize(string(rys_ensemble,'/',"ens"))) :
-    (rys_e = nnlearn.Bayes_IPM_ensemble(rys_ensemble, ensemble_size, rys_source_priors, (rys_mix_prior, mixing_prior), rys_matrix, rys_obs, source_length_range))
+    (rys_e = nnlearn.Bayes_IPM_ensemble(worker_pool, rys_ensemble, ensemble_size, rys_source_priors, (rys_mix_prior, mixing_prior), rys_matrix, rys_obs, source_length_range))
 
 isfile(string(combined_ensemble,'/',"ens")) ? (combined_e = deserialize(string(combined_ensemble,'/',"ens"))) :
-    (combined_e = nnlearn.Bayes_IPM_ensemble(combined_ensemble, ensemble_size, combined_source_priors, (combined_mix_prior, mixing_prior), combined_matrix, combined_obs, source_length_range))
+    (combined_e = nnlearn.Bayes_IPM_ensemble(worker_pool, combined_ensemble, ensemble_size, combined_source_priors, (combined_mix_prior, mixing_prior), combined_matrix, combined_obs, source_length_range))
 
 @info "Learning differential sib motifs by nested sampling of posterior..."
 nnlearn.ns_converge!(sib_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
