@@ -201,7 +201,7 @@ end
                         push!(indices_to_flip, index_to_flip)
                     end
                     mix[indices_to_flip] .= .!mix[indices_to_flip]
-                    clean[unique([idx[1] for idx in indices_to_flip])] .= false #track dirty indices
+                    clean[unique([idx[1] for idx in indices_to_flip])] .= false #mark all obs that had flipped indices dirty
                 end
 
                 function permute_source_weights!(mix::BitMatrix, sources::Vector{Tuple{Matrix{Float64},Int64}}, moves::Int64, PWM_shift_dist::Distributions.Uniform, clean::Vector{Bool})
@@ -286,12 +286,13 @@ function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, co
 
     while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         merge_model = deserialize(rand(models).path) #randomly select a model to merge
-        s = rand(1:S)
-        m.sources[s] = merge_model.sources[s]
-        m.mixing_matrix[:,s] = merge_model.mixing_matrix[:,s]
-        clean[m.mixing_matrix[:,s]].=false
+        s = rand(1:S) #randomly select a source to merge
+        clean[m.mixing_matrix[:,s]].=false #mark dirty any obs that start with the source
+        m.sources[s] = merge_model.sources[s] #copy the source
+        m.mixing_matrix[:,s] = merge_model.mixing_matrix[:,s] #copy the mix for the source
+        clean[m.mixing_matrix[:,s]].=false #mark dirty any obs that end with hte source
 
-        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
+        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean) #assess likelihood
         iterate += 1
     end
 end
@@ -307,12 +308,13 @@ function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m:
 
     while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         merge_model = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge
-        s = rand(1:S)
-        m.sources[s] = merge_model.sources[s]
-        m.mixing_matrix[:,s] = merge_model.mixing_matrix[:,s]
-        clean[m.mixing_matrix[:,s]].=false
+        s = rand(1:S) #randomly select a source to merge
+        clean[m.mixing_matrix[:,s]].=false #mark dirty any obs that start with the source
+        m.sources[s] = merge_model.sources[s] #copy the source
+        m.mixing_matrix[:,s] = merge_model.mixing_matrix[:,s] #copy the mix for the source
+        clean[m.mixing_matrix[:,s]].=false #mark dirty any obs that end with hte source
 
-        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
+        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean) #assess likelihood
         iterate += 1
     end
 end
@@ -320,19 +322,22 @@ end
 #iterative source reinitialisation from priors
 function reinit_sources!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, iterates::Int64)
     m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
-    T,O = size(observations); T=T-1
-    S = length(m.sources)
+    T,O = size(observations); T=T-1; S = length(m.sources)
 
     a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true)
     clean=Vector{Bool}(trues(O))
 
     while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         s_to_reinit=rand(1:S) # pick a random source to reinitialise
-        m.sources[s_to_reinit] = init_logPWM_sources([source_priors[s_to_reinit]], m.source_length_limits)[1]
-        m.mixing_matrix[:,s_to_reinit] = init_mixing_matrix(mix_prior,O,1)
-        clean[m.mixing_matrix[:,s_to_reinit]].=false
+        clean[m.mixing_matrix[:,s_to_reinit]].=false #mark dirty any obs that have the source before the renitialization
 
-        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean)
+        m.sources[s_to_reinit] = init_logPWM_sources([source_priors[s_to_reinit]], m.source_length_limits)[1] #reinitialize the source
+
+        s_to_reinit<=size(mix_prior[1],2) ? (m.mixing_matrix[:,s_to_reinit] = mix_prior[1][:,s_to_reinit]) : #if the source has an informative prior, assign that
+            m.mixing_matrix[:,s_to_reinit] = init_mixing_matrix((falses(0,0),mix_prior[2]),O,1) #otherwise initialize the source's mix vector from the uninformative prior
+        clean[m.mixing_matrix[:,s_to_reinit]].=false #mark dirty any obs that have the source after the reinitialization
+
+        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mixing_matrix, true, true, cache, clean) #assess likelihood
         iterate += 1
     end
 end
