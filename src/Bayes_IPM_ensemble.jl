@@ -136,12 +136,10 @@ end
 					return counter
 				end
 
-				function worker_assemble(job_chan::RemoteChannel, models_chan::RemoteChannel)
-					persist=true
-					while persist
-						wait(job_chan)
-						params=fetch(job_chan)
-						params===nothing && (persist=false; break)
+				function worker_assemble(job_chan::RemoteChannel, models_chan::RemoteChannel) #NEEDS REWRITING, TOO SLOW IN DISTRIBUTED
+					wait(job_chan)
+					params=fetch(job_chan)
+					while isready(job_chan)
 						model=ICA_PWM_model(string(myid()),params...)
 						put!(models_chan,model)
 					end
