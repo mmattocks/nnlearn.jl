@@ -23,7 +23,7 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 2500
+const ensemble_size = 3000
 const no_sources = 50
 const source_min_bases = 3
 const source_max_bases = Int(ceil(position_size/2))
@@ -32,17 +32,17 @@ const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .1
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 10
-const permute_params = [("permute",(100,100)),("permute",(10,5000,[.8,.1,.1])),("permute",(1,1000,[0,.5,.5])),("merge",(no_sources*10)),("init",(no_sources*10))]
+const permute_params = [("permute",(100,100)),("permute",(10,5000,[.8,.1,.1])),("permute",(1000,2,[0,.5,.5])),("merge",(no_sources*10)),("init",(no_sources*10))]
 const prior_wt=3.0
 
 @info "Loading master libraries..."
 using Distributed, Serialization
 
 @info "Adding librarians and workers..."
-remote_machine = "10.0.0.2"
-remote_pool=addprocs([(remote_machine, 1)], tunnel=true)
-librarians=addprocs(2)
-local_pool=addprocs(2)
+remote_machine = "10.0.0.3"
+remote_pool=addprocs([(remote_machine, 2)], tunnel=true)
+librarians=addprocs(3)
+local_pool=addprocs(1)
 worker_pool=vcat(remote_pool,local_pool)
 
 @info "Loading libraries everywhere..."
