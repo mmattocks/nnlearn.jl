@@ -110,7 +110,9 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.ensemble_directory,'/',"ens"), e) #every backup interval, serialise the ensemble
 
-        update!(meter, e.log_Li[end], findmax([model.log_Li for model in e.models])[1], CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], e.log_Zi[end], 1)
+        Li_vec=[model.log_Li for model in e.models]
+
+        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, 1)
     end
 
     final_logZ = logsumexp([model.log_Li for model in e.models]) +  e.log_Xi[length(e.log_Li)] - log(1/length(e.models))
@@ -151,7 +153,9 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.ensemble_directory,'/',"ens"), e) #every backup interval, serialise the ensemble
 
-        update!(meter, e.log_Li[end], findmax([model.log_Li for model in e.models])[1], CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], e.log_Zi[end], wk)
+        Li_vec=[model.log_Li for model in e.models]
+
+        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk)
     end
 
     take!(job_chan); put!(job_chan, nothing)

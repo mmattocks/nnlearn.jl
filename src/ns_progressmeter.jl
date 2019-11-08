@@ -14,11 +14,11 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
     information::Float64
-    evidence::Float64
     etc::Float64
     contour::Float64
     max_lh::Float64
     naive::Float64
+    li_dist::Vector{Float64}
     stepworker::Int64
 
     function ProgressNS{T}(    naive::Float64,
@@ -31,7 +31,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                start_it::Int=1) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0, 0.0,naive,0)
+        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0,naive,[0.0],0)
     end
 end
 
@@ -41,7 +41,7 @@ ProgressNS(naive::Float64, interval::Real, dt::Real=0.1, desc::AbstractString="N
 
 ProgressNS(naive::Float64, interval::Real, desc::AbstractString, offset::Integer=0, start_it::Integer=1) = ProgressNS{typeof(interval)}(naive, interval, desc=desc, offset=offset, start_it=start_it)
 
-function update!(p::ProgressNS, contour, max,  val, thresh, info, logz, worker; options...)
+function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker; options...)
     p.contour = contour
     p.max_lh = max
     interval = val - thresh
@@ -50,8 +50,8 @@ function update!(p::ProgressNS, contour, max,  val, thresh, info, logz, worker; 
     p.etc= (interval/step)*step_time
     p.interval=interval
     p.information = info
-    p.evidence = logz
     p.counter += 1
+    p.li_dist=li_dist
     p.stepworker = worker
     updateProgress!(p; options...)
 end
@@ -64,11 +64,14 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
         if p.printed
             p.triggered = true
             dur = ProgressMeter.durationstring(t-p.tfirst)
-            msg = @sprintf "%s Converged. Time: %s (%d iterations). logZ: %s, H: %s" p.desc dur p.counter p.evidence p.information
+            msg = @sprintf "%s Converged. Time: %s (%d iterations). H: %s" p.desc dur p.counter p.information
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            hist=UnicodePlots.histogram(p.li_dist)
+            #p.numprintedvalues=nrows(hist.graphics)
+            show(p.output, hist)
             ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             ProgressMeter.printover(p.output, msg, p.color)
-            ProgressMeter.printvalues!(p, showvalues; color = valuecolor)
+
             if keep
                 println(p.output)
             else
@@ -80,12 +83,19 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
-        msg = @sprintf "%s (Step %i::Wk:%g Contour: %g MELH: %g NLR: %g logZ: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker p.contour p.max_lh (p.max_lh-p.naive) p.evidence p.information p.interval hmss(p.etc)
+        msg = @sprintf "%s (Step %i::Wk:%g Contour: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
+        hist=UnicodePlots.histogram(p.li_dist)
+        p.numprintedvalues=nrows(hist.graphics)+4
+
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         ProgressMeter.printover(p.output, msg, p.color)
-        ProgressMeter.printvalues!(p, showvalues; color = valuecolor)
+        print(p.output, "\n")
+        show(p.output, hist)
+        print(p.output, "\n")
+
         print(p.output, "\r\u1b[A" ^ (p.offset + p.numprintedvalues))
+
         # Compensate for any overhead of printing. This can be
         # especially important if you're running over a slow network
         # connection.

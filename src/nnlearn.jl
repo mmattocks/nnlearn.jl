@@ -5,7 +5,7 @@ Functions to learn a metamotif model of nucleosome positions by nested sampling
 """
 
 module nnlearn
-    using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributed, Distributions, CLHMM, HMMBase, ProgressMeter, Serialization
+    using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributed, Distributions, CLHMM, HMMBase, ProgressMeter, Serialization, UnicodePlots
     import ProgressMeter: AbstractProgress
     import Printf: @sprintf
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
