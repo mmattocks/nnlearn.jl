@@ -339,4 +339,5 @@ end
     @test typeof(final_logZ) == nnlearn.Bayes_IPM_ensemble
 
     rm(ensembledir, recursive=true)
+    rm(spensembledir, recursive=true)
 end
