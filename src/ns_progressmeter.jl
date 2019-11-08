@@ -45,11 +45,14 @@ ProgressNS(naive::Float64, interval::Real, desc::AbstractString, offset::Integer
 function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker; options...)
     p.contour = contour
     p.max_lh = max
+
     interval = val - thresh
-    p.total_step+=p.interval-interval
+    step = p.interval - interval
+    !isinf(step) && (p.total_step+=step)
+
     steps_elapsed=p.counter-p.start_it
     step_time=(time()-p.tfirst)/steps_elapsed
-    p.etc= (interval/(p.total_step/steps_elapsed))*step_time
+    p.etc= (p.interval/(p.total_step/steps_elapsed))*step_time
     p.interval=interval
     p.information = info
     p.counter += 1
@@ -110,5 +113,6 @@ end
                     isnan(dt) && return "NaN"
                     (h,r) = divrem(dt,60*60)
                     (m,r) = divrem(r, 60)
+                    (isnan(h)||isnan(m)||isnan(r)) && return "NaN"
                     string(Int(h),":",Int(m),":",Int(ceil(r)))
                 end
