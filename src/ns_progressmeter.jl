@@ -13,6 +13,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
+    total_step::Float64
     information::Float64
     etc::Float64
     contour::Float64
@@ -31,7 +32,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                start_it::Int=1) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0,naive,[0.0],0)
+        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0,0.0,naive,[0.0],0)
     end
 end
 
@@ -45,9 +46,10 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     p.contour = contour
     p.max_lh = max
     interval = val - thresh
-    step=p.interval-interval
-    step_time=(time()-p.tfirst)/(p.counter-p.start_it)
-    p.etc= (interval/step)*step_time
+    p.total_step+=p.interval-interval
+    steps_elapsed=p.counter-p.start_it
+    step_time=(time()-p.tfirst)/steps_elapsed
+    p.etc= (interval/(p.total_step/steps_elapsed))*step_time
     p.interval=interval
     p.information = info
     p.counter += 1
@@ -83,7 +85,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
-        msg = @sprintf "%s (Step %i::Wk:%g Contour: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
+        msg = @sprintf "%s (Step %i::Wk:%g LC: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
         hist=UnicodePlots.histogram(p.li_dist)
         p.numprintedvalues=nrows(hist.graphics)+4
 
