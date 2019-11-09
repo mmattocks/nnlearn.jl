@@ -48,7 +48,7 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
 
     interval = val - thresh
     step = p.interval - interval
-    !isinf(step) && (p.total_step+=step)
+    !isinf(step) && step>0 && (p.total_step+=step)
 
     steps_elapsed=p.counter-p.start_it
     step_time=(time()-p.tfirst)/steps_elapsed
