@@ -32,7 +32,7 @@ const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .1
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 10
-const permute_params = [[("permute",(1,9)) for i in 1:50]...,("permute",(5,4,[0.,1.,0.])),("permute",(10,2,[0,.5,.5])),("permute",(10,100)),("permute",(10,5000,[.8,.1,.1])),("merge",(no_sources*3)),("init",(no_sources))]
+const permute_params = [[("permute",(1,9)) for i in 1:10]...,("permute",(5,4,[0.,1.,0.])),("permute",(10,2,[0,.5,.5])),("permute",(10,100)),[("permute",(1,5000,[.8,.1,.1])) for i in 1:10]...,("merge",(no_sources*3)),("init",(no_sources))]
 const prior_wt=3.0
 
 @info "Loading master libraries..."
