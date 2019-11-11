@@ -128,15 +128,14 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
     log_frac=log(evidence_fraction)
 
     model_chan= RemoteChannel(()->Channel{Union{Tuple{ICA_PWM_model,Int64},Nothing}}(length(worker_pool))) #channel to take EM iterates off of
-    job_chan = RemoteChannel(()->Channel{Union{Bayes_IPM_ensemble,Nothing}}(1))
-    put!(job_chan,e)
+    job_chan = RemoteChannel(()->Channel{Union{Vector{Model_Record},Nothing}}(1))
+    put!(job_chan,e.models)
 
     worker_persistence=trues(length(worker_pool))
 
     for (x,worker) in enumerate(worker_pool)
         librarian = librarians[Int(ceil(x*(length(librarians)/length(worker_pool))))]
-        job_model=deserialize((rand(e.models).path))
-        remote_do(worker_permute, worker, librarian, job_chan, model_chan, param_set, permute_limit)
+        remote_do(worker_permute, worker, e, librarian, job_chan, model_chan, param_set, permute_limit)
     end
 
     iterate = length(e.log_Li) #get the iterate from the ensemble 
@@ -149,7 +148,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
                 (@error "All workers failed to find new models, aborting at current iterate."; return e) #if there is a warning, iust return the ensemble and print info
         iterate += 1
 
-        take!(job_chan); put!(job_chan,e)
+        take!(job_chan); put!(job_chan,e.models)
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.ensemble_directory,'/',"ens"), e) #every backup interval, serialise the ensemble
 

@@ -181,18 +181,18 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 	return nothing
 end
 
-function worker_permute(librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; reset=true)
+function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; reset=true)
 	persist=true
 	id=myid()
 	while persist
 		wait(job_chan)
-		e = fetch(job_chan)
-		e === nothing && (persist=false) && break
-		contour, ll_idx = findmin([model.log_Li for model in e.models])
-		deleteat!(e.models, ll_idx)
+		models = fetch(job_chan)
+		models === nothing && (persist=false) && break
+		contour, ll_idx = findmin([model.log_Li for model in models])
+		deleteat!(models, ll_idx)
 
 		for i=1:permute_limit
-			m_record = rand(e.models)
+			m_record = rand(models)
 			job_model = remotecall_fetch(deserialize,librarian,m_record.path)
 			original = deepcopy(job_model)
 
@@ -202,7 +202,7 @@ function worker_permute(librarian::Int64, job_chan::RemoteChannel, models_chan::
 					permute_model!(job_model, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 				elseif mode == "merge"
 					reset && (job_model = deepcopy(original))
-					merge_model!(librarian, e.models, job_model, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
+					merge_model!(librarian, models, job_model, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 				elseif mode == "init"
 					reset && (job_model = deepcopy(original))
 					reinit_sources!(job_model, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
