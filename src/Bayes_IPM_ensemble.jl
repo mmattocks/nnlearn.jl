@@ -3,8 +3,8 @@ mutable struct Bayes_IPM_ensemble
 	models::Vector{Model_Record} #ensemble keeps paths to serialised models and their likelihood tuples rather than keeping the models in memory
 
 	log_Li::Vector{Float64} #likelihood of lowest-ranked model at iterate i
-	log_Xi::Vector{Float64} #amt of prior mass included in ensemble countour at Li
-	log_wi::Vector{Float64} #width+ of prior mass covered in this source_stop
+	log_Xi::Vector{Float64} #amt of prior mass included in ensemble contour at Li
+	log_wi::Vector{Float64} #width of prior mass covered in this iterate
 	log_Liwi::Vector{Float64} #evidentiary weight of the iterate
 	log_Zi::Vector{Float64} #ensemble evidence
 	Hi::Vector{Float64} #ensemble information

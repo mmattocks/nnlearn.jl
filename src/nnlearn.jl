@@ -74,5 +74,6 @@ module nnlearn
     include("nested_sampler.jl")
     include("model_display.jl")
     include("ns_progressmeter.jl")
+    include("ensemble_utils.jl")
     #include("performance.jl")
 end # module
