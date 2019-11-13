@@ -18,7 +18,7 @@ mutable struct Bayes_IPM_ensemble
 	bg_scores::Matrix{Float64} #precalculated background HMM scores
 
 	sample_posterior::Bool
-	retained_posterior_samples::Vector{Model_Record} #list of posterior sample filenames
+	retained_posterior_samples::Vector{Model_Record} #list of posterior sample records
 
 	model_counter::Int64
 
