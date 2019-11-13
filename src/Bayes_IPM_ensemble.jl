@@ -210,6 +210,8 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 					@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
 				end
 				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id)); break; break)
+				wait(job_chan)
+				fetch(job_chan)!=models && (break; break) #if the ensemble has changed during the search, update it
 			end
 		i==permute_limit && (put!(models_chan,nothing);persist=false)#worker to put nothing on channel if it fails to find a model more likely than contour
 		end
