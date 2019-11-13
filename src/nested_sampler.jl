@@ -133,9 +133,11 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
     worker_persistence=trues(length(worker_pool))
 
+    @assert length(param_set)==length(worker_pool)
+
     for (x,worker) in enumerate(worker_pool)
         librarian = librarians[Int(ceil(x*(length(librarians)/length(worker_pool))))]
-        remote_do(worker_permute, worker, e, librarian, job_chan, model_chan, param_set, permute_limit)
+        remote_do(worker_permute, worker, e, librarian, job_chan, model_chan, param_set[x], permute_limit)
     end
 
     iterate = length(e.log_Li) #get the iterate from the ensemble 
