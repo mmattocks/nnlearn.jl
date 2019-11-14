@@ -24,12 +24,12 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 #JOB CONSTANTS
 const position_size = 141
 const ensemble_size = 2000
-const no_sources = 35
+const no_sources = 50
 const source_min_bases = 3
 const source_max_bases = Int(ceil(position_size/2))
 @assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
-const mixing_prior = .001
+const mixing_prior = .01
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 10
 const permute_params = [
@@ -41,8 +41,9 @@ const permute_params = [
         ("init",(no_sources))
     ], #worker 2
     [
+        [("permute",(1,10000,[.8,.1,.1])) for i in 1:3]...,
+        [("permute",(1,5000,[.8,.1,.1])) for i in 1:3]...,
         [("permute",(10,100,[1.,0.,0.])) for i in 1:10]...,
-        [("permute",(1,5000,[.8,.1,.1])) for i in 1:10]...,
         ("merge",(no_sources*3)),
         ("init",(no_sources))
     ], #worker 3
@@ -99,7 +100,7 @@ combined_source_priors[ss+1:ss+rs]=rys_source_priors[1:rs]
 
 @info "Initialising sib ICA PWM model ensemble for nested sampling..."
 isfile(string(sib_ensemble,'/',"ens")) ? (sib_e = deserialize(string(sib_ensemble,'/',"ens"))) :
-    (sib_e = nnlearn.Bayes_IPM_ensemble(worker_pool, sib_ensemble, ensemble_size, sib_source_priors, ( sib_mix_prior, mixing_prior), sib_matrix, sib_obs, source_length_range))
+    (sib_e = nnlearn.Bayes_IPM_ensemble(worker_pool, sib_ensemble, ensemble_size, sib_source_priors, (sib_mix_prior, mixing_prior), sib_matrix, sib_obs, source_length_range))
 
 @info "Learning differential sib motifs by nested sampling of posterior..."
 nnlearn.ns_converge!(sib_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
