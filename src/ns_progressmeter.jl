@@ -56,7 +56,6 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
 
     now=time()
     p.tstp=now-p.tlast
-    p.tlast=now
     mean_stp_time=(p.tlast-p.tfirst)/stps_elapsed
     p.tstp > mean_stp_time ? (p.over=true) : (p.over=false)
     p.etc= (p.interval/(p.total_step/stps_elapsed))*mean_stp_time
@@ -70,7 +69,6 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
 end
 
 function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
-    println("hoo")
     p.offset = offset
     t = time()
     if p.interval <= 0 && !p.triggered
@@ -96,7 +94,6 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
     end
 
     if t > p.tlast+p.dt && !p.triggered
-        println("hoo")
         elapsed_time = t - p.tfirst
         msg = @sprintf "%s (Step %i::Wk:%g (%s,%s) LC: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker hmss(p.tstp) (p.over ? "+" : "-") p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
         hist=UnicodePlots.histogram(p.li_dist)
