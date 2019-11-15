@@ -95,6 +95,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
     end
 
     if t > p.tlast+p.dt && !p.triggered
+        println("hoo")
         elapsed_time = t - p.tfirst
         msg = @sprintf "%s (Step %i::Wk:%g (%s,%s) LC: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker hmss(p.tstp) (p.over ? "+" : "-") p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
         hist=UnicodePlots.histogram(p.li_dist)
