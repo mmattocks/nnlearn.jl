@@ -70,6 +70,7 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
 end
 
 function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, offset::Integer = p.offset, keep = (offset == 0))
+    println("hoo")
     p.offset = offset
     t = time()
     if p.interval <= 0 && !p.triggered
