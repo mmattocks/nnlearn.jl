@@ -7,6 +7,8 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     triggered::Bool
     tfirst::Float64
     tlast::Float64
+    tstp::Float64
+    over::Bool
     printed::Bool        # true if we have issued at least one status update
     desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
@@ -32,7 +34,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                start_it::Int=1) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0,0.0,naive,[0.0],0)
+        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, 0.0, false, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0,0.0,naive,[0.0],0)
     end
 end
 
@@ -50,9 +52,15 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     step = p.interval - interval
     !isinf(step) && step>0 && (p.total_step+=step)
 
-    steps_elapsed=p.counter-p.start_it
-    step_time=(time()-p.tfirst)/steps_elapsed
-    p.etc= (p.interval/(p.total_step/steps_elapsed))*step_time
+    stps_elapsed=p.counter-p.start_it
+
+    now=time()
+    p.tstp=now-p.tlast
+    p.tlast=now
+    mean_stp_time=(p.tlast-p.tfirst)/stps_elapsed
+    p.tstp > mean_stp_time ? (p.over=true) : (p.over=false)
+    p.etc= (p.interval/(p.total_step/stps_elapsed))*mean_stp_time
+
     p.interval=interval
     p.information = info
     p.counter += 1
@@ -88,7 +96,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
-        msg = @sprintf "%s (Step %i::Wk:%g LC: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
+        msg = @sprintf "%s (Step %i::Wk:%g (%s,%s) LC: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker hmss(p.tstp) (p.over ? "+" : "-") p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
         hist=UnicodePlots.histogram(p.li_dist)
         p.numprintedvalues=nrows(hist.graphics)+4
 

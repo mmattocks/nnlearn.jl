@@ -313,7 +313,7 @@ end
     param_set = [("source",(10,.25,.5)),("mix",(10)),("merge",(10)),("init",(10))]
 
     @info "Testing threaded convergence..."
-    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 1.)
+    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, .1)
 
     @test length(sp_ensemble.models) == 200
     @test length(sp_ensemble.log_Li) == length(sp_ensemble.log_Xi) == length(sp_ensemble.log_wi) == length(sp_ensemble.log_Liwi) == length(sp_ensemble.log_Zi) == length(sp_ensemble.Hi) == sp_ensemble.model_counter-200
