@@ -78,13 +78,13 @@ end
     clean = Vector{Bool}(trues(O))
     nnlearn.mix_matrix_decorrelate!(empty_mix, 500, clean)
 
-    @test sum(empty_mix) == 500
+    @test sum(empty_mix) > 0
 
     full_mix = trues(O,S)
     clean = Vector{Bool}(trues(O))
     nnlearn.mix_matrix_decorrelate!(full_mix, 500, clean)
 
-    @test O*S-sum(full_mix) == 500
+    @test O*S-sum(full_mix) < 500
 end
 
 @testset "Observation setup and scoring functions" begin

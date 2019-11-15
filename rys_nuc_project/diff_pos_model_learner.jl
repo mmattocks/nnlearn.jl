@@ -23,37 +23,38 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 2500
-const no_sources = 35
+const ensemble_size = 3000
+const no_sources = 40
 const source_min_bases = 3
 const source_max_bases = Int(ceil(position_size/2))
 @assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
-const mixing_prior = .05
+const mixing_prior = .07
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 10
 const permute_params = [
     [
-        [("permute",(1,9)) for i in 1:10]...,
-        [("permute",(5,4,[0.,1.,0.])) for i in 1:10]...,
-        [("permute",(10,2,[0,.5,.5])) for i in 1:10]...,
-        ("merge",(no_sources*3)),
+        ("source",(no_sources, .2, .3)),
+        ("source",(no_sources, .8, 1.)),
+        ("merge",(no_sources)),
         ("init",(no_sources))
     ], #worker 2
     [
-        [("permute",(1,10000,[.8,.1,.1])) for i in 1:3]...,
-        [("permute",(1,5000,[.8,.1,.1])) for i in 1:3]...,
-        [("permute",(10,100,[1.,0.,0.])) for i in 1:10]...,
-        ("merge",(no_sources*3)),
+        ("mix",(no_sources)),
+        ("merge",(no_sources)),
         ("init",(no_sources))
     ], #worker 3
     [
-        [("merge",(10)) for i in 1:5]...,
-        [("permute",(2,10,[.1,.7,.2])) for i in 1:3]...,
-        [("permute",(1,5000,[.8,.1,.1])) for i in 1:10]...,
-        ("merge",(no_sources*3)),
-        ("init",(no_sources))]
-    ] #worker 7
+        ("merge",(no_sources)),
+        ("init",(no_sources))
+    ], #worker 7
+    [
+        ("source",(no_sources, .2, .3)),
+        ("source",(no_sources, .8, 1.)),
+        ("init",(no_sources))
+    ] #worker 8
+]
+
 const prior_wt=3.0
 
 @info "Loading master libraries..."
@@ -62,8 +63,8 @@ using Distributed, Serialization
 @info "Adding librarians and workers..."
 remote_machine = "10.0.0.3"
 remote_pool=addprocs([(remote_machine, 2)], tunnel=true)
-librarians=addprocs(3)
-local_pool=addprocs(1)
+librarians=addprocs(2)
+local_pool=addprocs(2)
 worker_pool=vcat(remote_pool,local_pool)
 
 @info "Loading libraries everywhere..."

@@ -298,14 +298,7 @@ function permute_mix!(m::ICA_PWM_model, contour::Float64, observations::Matrix{I
     end
 end
                 function mix_matrix_decorrelate!(mix::BitMatrix, moves::Int64, clean::Vector{Bool})
-                    indices_to_flip = Vector{CartesianIndex{2}}()
-                    for i in 1:moves
-                        index_to_flip = rand(CartesianIndices(mix))
-                        while index_to_flip in indices_to_flip #sampling without replacement, want to always get the requested # of indices
-                            index_to_flip = rand(CartesianIndices(mix))
-                        end
-                        push!(indices_to_flip, index_to_flip)
-                    end
+                    indices_to_flip = rand(CartesianIndices(mix), moves)
                     mix[indices_to_flip] .= .!mix[indices_to_flip]
                     clean[unique([idx[1] for idx in indices_to_flip])] .= false #mark all obs that had flipped indices dirty
                 end
