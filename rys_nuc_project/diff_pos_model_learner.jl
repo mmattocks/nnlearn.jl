@@ -23,13 +23,13 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 2000
-const no_sources = 50
+const ensemble_size = 2500
+const no_sources = 35
 const source_min_bases = 3
 const source_max_bases = Int(ceil(position_size/2))
 @assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
-const mixing_prior = .01
+const mixing_prior = .05
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 10
 const permute_params = [
@@ -83,7 +83,7 @@ combined_obs = deserialize(combined_code_binary)
 @info "Loading source priors..."
 sib_wms = nnlearn.read_fa_wms_tr(sib_wms_path)
 rys_wms = nnlearn.read_fa_wms_tr(rys_wms_path)
-
+CartesianIndices
 @info "Assembling source priors..."
 sib_mix_prior = nnlearn.cluster_mix_prior!(deserialize(sib_df_binary), sib_wms)
 rys_mix_prior = nnlearn.cluster_mix_prior!(deserialize(rys_df_binary), rys_wms)

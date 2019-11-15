@@ -47,9 +47,9 @@ end
                     @assert 0.0 <= uninform <=1.0
                     mix_matrix = falses(no_observations, no_sources)
                     if size(inform,1)>0
-                        mix_matrix[1:size(inform,1),1:size(inform,2)]=inform
+                        mix_matrix[:,1:size(inform,2)]=inform
                     end
-                    for index in eachindex(mix_matrix[:,size(inform,2)+1:end])
+                    for index in CartesianIndices((1:no_observations,size(inform,2)+1:end))
                         rand() <= uninform && (mix_matrix[index] = true)
                     end
                     return mix_matrix
