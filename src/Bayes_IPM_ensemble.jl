@@ -151,8 +151,10 @@ end
 #randomly select a model from the ensemble (the least likely having been removed by this point), then sample new models by permuting with each of hte given parameter sets until a model more likely than the current contour is found
 #if none is found for the candidate model, move on to another candidate until the models_to_permute iterate is reached, after which return nothing for an error code
 
-#three permutation modes: permute (iterative random changes to mix matrix and sources until model lh>contour or iterate limit reached)
-#						-(iterates, moves, move_sizes, PWM_shift_range (a Distribution)) for permute params
+#four permutation modes: source (iterative random changes to sources until model lh>contour or iterate limit reached)
+#						-(iterates, weight shift freq per source base, length change freq per source, weight_shift_dist (a ContinuousUnivariateDistribution)) for permute params
+#						mix (iterative random changes to mix matrix as above)
+#						-(iterates, unitrange of # of moves)
 #						init (iteratively reinitialize sources from priors)
 #						-(iterates) for init params
 #						merge (iteratively copy a source + mix matrix row from another model in the ensemble until lh>contour or iterate						limit reached)
@@ -163,17 +165,17 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 		m = deserialize(m_record.path)
 		original = deepcopy(m)
 		for (mode, params) in param_set
-			if mode == "permute"
-				reset && (m = deepcopy(original))
-				permute_model!(m, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
+			reset && (m = deepcopy(original))
+			if mode == "source"
+				permute_source!(m, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
+			elseif mode == "mix"
+				permute_mix!(m, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 			elseif mode == "merge"
-				reset && (m = deepcopy(original))
 				merge_model!(e.models, m, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 			elseif mode == "init"
-				reset && (m = deepcopy(original))
 				reinit_sources!(m, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
-				@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
+				@error "Malformed permute mode code! Current supported: \"source\", \"mix\", \"merge\", \"init\""
 			end
 			m.log_likelihood > contour && return m
 		end
@@ -197,17 +199,17 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 			original = deepcopy(job_model)
 
 			for (mode, params) in param_set
-				if mode == "permute"
-					reset && (job_model = deepcopy(original))
-					permute_model!(job_model, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
+				reset && (job_model = deepcopy(original))
+				if mode == "source"
+					permute_source!(job_model, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
+				elseif mode == "mix"
+					permute_mix!(job_model, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
 				elseif mode == "merge"
-					reset && (job_model = deepcopy(original))
 					merge_model!(librarian, models, job_model, contour, e.obs_array,  e.obs_lengths, e.bg_scores, params...)
 				elseif mode == "init"
-					reset && (job_model = deepcopy(original))
 					reinit_sources!(job_model, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 				else
-					@error "Malformed permute mode code! Current supported: \"permute\", \"merge\", \"init\""
+					@error "Malformed permute mode code! Current supported: \"source\", \"mix\", \"merge\", \"init\""
 				end
 				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id)); break; break)
 				wait(job_chan)

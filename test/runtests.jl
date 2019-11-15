@@ -40,12 +40,17 @@ O=1000;S=50
 
     permuted_weight_sources=deepcopy(test_sources)
     clean = Vector{Bool}(trues(2))
-    nnlearn.permute_source_weights!(test_mix,permuted_weight_sources,100,Uniform(.0001,.02), clean)
+    nnlearn.permute_source_weights!(1,test_mix,permuted_weight_sources,1.,Weibull(1.5,.1), clean)
+    nnlearn.permute_source_weights!(2,test_mix,permuted_weight_sources,1.,Weibull(1.5,.1), clean)
 
     @test permuted_weight_sources != test_sources
     for (s,source) in enumerate(permuted_weight_sources)
-        for pos in 1:size(source[1])[1]
+        for pos in 1:size(source[1],1)
             @test HMMBase.isprobvec(exp.(source[1][pos,:]))
+            if !HMMBase.isprobvec(exp.(source[1][pos,:]))
+                println("source $s, pos $pos")
+                println(exp.(source[1][pos,:]))
+            end
             @test source[1][pos,:] != test_sources[s][1][pos,:]
         end
     end
@@ -53,16 +58,16 @@ O=1000;S=50
 
     permuted_length_sources=deepcopy(test_sources)
     clean = Vector{Bool}(trues(2))
-    nnlearn.permute_source_lengths!(test_mix,permuted_length_sources,test_priors,1,1:3,clean)
-    @test permuted_length_sources != test_sources
+    nnlearn.permute_source_length!(1,test_mix,permuted_length_sources,test_priors,1:3,clean)
+    @test size(permuted_length_sources[1][1],1) != size(test_sources[1][1],1)
 end
 
 @testset "Mix matrix initialisation and manipulation functions" begin
     #test mix matrix init
 
     prior_mix_test=nnlearn.init_mixing_matrix((trues(2,10),0.0),2, 20)
-    @test all(prior_mix_test[:,10])
-    @test !any(prior_mix_test[11,20])
+    @test all(prior_mix_test[:,1:10])
+    @test !any(prior_mix_test[:,11:20])
 
     @test sum(nnlearn.init_mixing_matrix((falses(0,0),1.0), O, S)) == O*S
     @test sum(nnlearn.init_mixing_matrix((falses(0,0),0.0), O, S)) == 0
@@ -212,9 +217,13 @@ end
     @test test_model.mixing_matrix == mix_target
     @test test_model.log_likelihood == lh_target
     
-    permuted_model = deepcopy(test_model)
-    nnlearn.permute_model!(permuted_model, lh_target, obs, obsl, bg_scores, source_priors, 5)
-    @test permuted_model.log_likelihood > test_model.log_likelihood
+    ps_model = deepcopy(test_model)
+    nnlearn.permute_source!(ps_model, lh_target, obs, obsl, bg_scores, source_priors, 100,1.,.5)
+    @test ps_model.log_likelihood > test_model.log_likelihood
+
+    pm_model = deepcopy(test_model)
+    nnlearn.permute_mix!(pm_model, lh_target, obs, obsl, bg_scores, source_priors, 100)
+    @test (pm_model.log_likelihood > test_model.log_likelihood) || pm_model.log_likelihood===-Inf
 
     reinit_model = deepcopy(test_model)
     nnlearn.reinit_sources!(reinit_model, lh_target, obs, obsl, bg_scores, source_priors, (falses(0,0),mix_prior), 500)
@@ -301,10 +310,10 @@ end
     rm(distdir, recursive=true)
 
     permute_limit = 900
-    param_set = [("permute",(100,50)),("merge",(100)),("permute",(500,3)),("init",(100))]
+    param_set = [("source",(10,.25,.5)),("mix",(10)),("merge",(10)),("init",(10))]
 
     @info "Testing threaded convergence..."
-    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 25.)
+    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 1.)
 
     @test length(sp_ensemble.models) == 200
     @test length(sp_ensemble.log_Li) == length(sp_ensemble.log_Xi) == length(sp_ensemble.log_wi) == length(sp_ensemble.log_Liwi) == length(sp_ensemble.log_Zi) == length(sp_ensemble.Hi) == sp_ensemble.model_counter-200
