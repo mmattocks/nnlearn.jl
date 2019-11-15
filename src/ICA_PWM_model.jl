@@ -44,9 +44,10 @@ end
 
                 function init_mixing_matrix(mix_prior::Tuple{BitMatrix,Float64}, no_observations::Int64, no_sources::Int64)
                     inform,uninform=mix_prior
-                    @assert 0.0 <= uninform <=1.0
+                    @assert size(inform,1)==no_observations && size(inform,2)<=no_sources "Bad informative mix prior dimensions!"
+                    @assert 0.0 <= uninform <=1.0 "Uninformative mix prior not between 0.0 and 1.0!"
                     mix_matrix = falses(no_observations, no_sources)
-                    if size(inform,1)>0
+                    if size(inform,2)>0
                         mix_matrix[:,1:size(inform,2)]=inform
                     end
                     for index in CartesianIndices((1:no_observations,size(inform,2)+1:end))

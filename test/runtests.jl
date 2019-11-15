@@ -60,7 +60,9 @@ end
 @testset "Mix matrix initialisation and manipulation functions" begin
     #test mix matrix init
 
-    @test all(nnlearn.init_mixing_matrix((trues(2,10),0.5),2, 10))
+    prior_mix_test=nnlearn.init_mixing_matrix((trues(2,10),0.0),2, 20)
+    @test all(prior_mix_test[:,10])
+    @test !any(prior_mix_test[11,20])
 
     @test sum(nnlearn.init_mixing_matrix((falses(0,0),1.0), O, S)) == O*S
     @test sum(nnlearn.init_mixing_matrix((falses(0,0),0.0), O, S)) == 0
