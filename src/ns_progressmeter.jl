@@ -68,8 +68,8 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          zeros(length(workers)),
          zeros(length(workers)),
          zeros(length(workers)),
-         [Vector{Float64}() for i in 1:length(workers)],
-         ["" for worker in 1:length(workers)],
+         [[0.] for i in 1:length(workers)],
+         ["none" for worker in 1:length(workers)],
          zeros(Int64,4),
          0.,
          eff_iterates)

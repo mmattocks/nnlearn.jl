@@ -132,7 +132,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
     worker_persistence=trues(length(worker_pool))
 
-    @assert length(param_set)==length(worker_pool)
+    @assert length(param_set)==length(worker_pool) "Each worker must have a parameter set!"
 
     for (x,worker) in enumerate(worker_pool)
         librarian = librarians[Int(ceil(x*(length(librarians)/length(worker_pool))))]
