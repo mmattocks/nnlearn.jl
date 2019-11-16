@@ -38,7 +38,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                workers::Vector{Int64};
                                dt::Real=0.1,
                                eff_iterates::Int64,
-                               desc::AbstractString="Nested Sampling: ",
+                               desc::AbstractString="Nested Sampling:: ",
                                color::Symbol=:green,
                                output::IO=stderr,
                                offset::Int=0,
@@ -76,7 +76,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     end
 end
 
-ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1, desc::AbstractString="Nested Sampling: ",
+ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1, desc::AbstractString="Nested Sampling:: ",
          color::Symbol=:green, output::IO=stderr, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = 
             ProgressNS{typeof(interval)}(naive, interval, workers, dt=dt, eff_iterates=eff_iterates, desc=desc, color=color, output=output, offset=offset, start_it=start_it)
 
@@ -133,8 +133,8 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             hist=UnicodePlots.histogram(p.li_dist)
             #p.numprintedvalues=nrows(hist.graphics)
-            show(p.output, hist)
             ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            show(p.output, hist)
             ProgressMeter.printover(p.output, msg, p.color)
 
             if keep
@@ -148,11 +148,10 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
-
-        wk_msgs = [@sprintf "Wk:%g:: J:%s JE:%.2f ME:%.2f T:%i" p.workers[widx] p.worker_jobs[widx] p.job_exhaust[widx] p.model_exhaust[widx] p.worker_totals[widx] for widx in 1:length(p.workers)]
+        wk_msgs = [@sprintf "Wk:%g:: J:%s JE:%.2f ME:%.3f T:%i" p.workers[widx] p.worker_jobs[widx] p.job_exhaust[widx] p.model_exhaust[widx] Int(floor(p.worker_totals[widx]/p.counter-p.start_it)) for widx in 1:length(p.workers)]
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.worker_eff, title="Worker Diagnostics", color=:magenta)
         
-        msg1 = @sprintf "%s (Step %i::Wk:%g: S:Mi:Me:I::%s:%s:%s:%s Time μ,Δ: (%s,%s) CI: %g ETC: %s)" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
+        msg1 = @sprintf "%s Step %i::Wk:%g: S|Mi|Me|I:%s|%s|%s|%s Time μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
         msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
         hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
