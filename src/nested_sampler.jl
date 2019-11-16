@@ -13,9 +13,9 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64)
     e.sample_posterior ? push!(e.retained_posterior_samples, Li_model) : rm(Li_model.path) #if sampling posterior, push the model record to the ensemble's posterior samples vector, otherwise delete the serialised model pointed to by the model record
 
     #SELECT NEW MODEL, SAVE TO ENSEMBLE DIRECTORY, CREATE RECORD AND PUSH TO ENSEMBLE
-    model_selected=false
+    model_selected=false; step_report=0
     while !model_selected
-        candidate=run_permutation_routine(e, param_set, permute_limit, ll_contour)
+        candidate,step_report=run_permutation_routine(e, param_set, permute_limit, ll_contour)
         if !(candidate===nothing)
             model_selected=true
             new_model_record = Model_Record(string(e.ensemble_directory,'/',e.model_counter), candidate.log_likelihood);
@@ -24,7 +24,7 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64)
             e.model_counter +=1
         else
             push!(e.models, Li_model)
-            return 1
+            return 1, nothing
         end
     end
          
@@ -40,7 +40,7 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64)
             (exp(CLHMM.lps(e.log_Zi[i],-e.log_Zi[j])) * CLHMM.lps(e.Hi[i],e.log_Zi[i])), #term2
             -e.log_Zi[j])) #term3
 
-    return 0
+    return 0, step_report
 end
 
 function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_set, permute_limit::Int64, worker_persistence::BitVector)
@@ -57,12 +57,12 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
     e.sample_posterior ? push!(e.retained_posterior_samples, Li_model) : rm(Li_model.path) #if sampling posterior, push the model record to the ensemble's posterior samples vector, otherwise delete the serialised model pointed to by the model record
 
     #SELECT NEW MODEL, SAVE TO ENSEMBLE DIRECTORY, CREATE RECORD AND PUSH TO ENSEMBLE
-    model_selected=false;wk=0
+    model_selected=false;wk=0;step_report=0
     while !model_selected
         wait(model_chan)
         model_tuple = take!(model_chan)
         if !(model_tuple===nothing)
-            candidate,wk=model_tuple
+            candidate,wk,step_report=model_tuple
             if candidate.log_likelihood > ll_contour
                 model_selected=true
                 new_model_record = Model_Record(string(e.ensemble_directory,'/',e.model_counter), candidate.log_likelihood);
@@ -73,11 +73,10 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
         else
             @warn "Worker failed to find new model in contour $ll_contour in iterate $i prior to reaching convergence criterion";
             worker_persistence[findfirst(worker_persistence)]=false
-            !any(worker_persistence) && ((push!(e.models, Li_model)); return (1,0))
+            !any(worker_persistence) && ((push!(e.models, Li_model)); return (1,0,0))
         end
     end
     
-         
     #UPDATE ENSEMBLE QUANTITIES   
     push!(e.log_Li, minimum([model.log_Li for model in e.models])) #log likelihood of the least likely model - the current ensemble ll contour at Xi
     push!(e.log_Xi, -i/N) #log Xi - crude estimate of the iterate's enclosed prior mass
@@ -91,7 +90,7 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
             (exp(CLHMM.lps(e.log_Zi[i],-e.log_Zi[j])) * CLHMM.lps(e.Hi[i],e.log_Zi[i])), #term2
             -e.log_Zi[j])) #term3
 
-    return (0,wk)
+    return 0, wk, step_report
 end
 
 function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001; backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
@@ -99,11 +98,11 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
     log_frac=log(evidence_fraction)
     
     iterate = length(e.log_Li) #get the iterate from the enemble 
-    meter = ProgressNS(e.naive_lh, typemax(Float64), "Nested Sampling: ", 0, iterate)
+    meter = ProgressNS(e.naive_lh, typemax(Float64), [1], "Nested Sampling: ", 0, iterate)
 
     while CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= CLHMM.lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the enemble 
-        warn = nested_step!(e,  param_set, permute_limit) #step the ensemble
+        warn,step_report = nested_step!(e,  param_set, permute_limit) #step the ensemble
         warn == 1 && #"1" passed for warn code means no workers persist; all have hit the permute limit
                 (@error "All workers failed to find new models, aborting at current iterate."; return e) #if there is a warning, iust return the ensemble and print info
         iterate += 1
@@ -112,7 +111,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 
         Li_vec=[model.log_Li for model in e.models]
 
-        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, 1)
+        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, 1, step_report...)
     end
 
     final_logZ = logsumexp([model.log_Li for model in e.models]) +  e.log_Xi[length(e.log_Li)] - log(1/length(e.models))
@@ -127,7 +126,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
     N = length(e.models)
     log_frac=log(evidence_fraction)
 
-    model_chan= RemoteChannel(()->Channel{Union{Tuple{ICA_PWM_model,Int64},Nothing}}(length(worker_pool))) #channel to take EM iterates off of
+    model_chan= RemoteChannel(()->Channel{Union{Tuple{ICA_PWM_model,Int64, Tuple},Nothing}}(length(worker_pool))) #channel to take EM iterates off of
     job_chan = RemoteChannel(()->Channel{Union{Vector{Model_Record},Nothing}}(1))
     put!(job_chan,e.models)
 
@@ -141,11 +140,11 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
     end
 
     iterate = length(e.log_Li) #get the iterate from the ensemble 
-    meter = ProgressNS(e.naive_lh, typemax(Float64), "Nested Sampling: ", 0, iterate)
+    meter = ProgressNS(e.naive_lh, typemax(Float64), worker_pool, "Nested Sampling: ", 0, iterate)
 
     while CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= CLHMM.lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the ensemble 
-        warn, wk = nested_step!(e, model_chan, param_set, permute_limit, worker_persistence) #step the ensemble
+        warn, wk, step_report = nested_step!(e, model_chan, param_set, permute_limit, worker_persistence) #step the ensemble
         warn == 1 && #"1" passed for warn code means no workers persist; all have hit the permute limit
                 (@error "All workers failed to find new models, aborting at current iterate."; return e) #if there is a warning, iust return the ensemble and print info
         iterate += 1
@@ -156,7 +155,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
         Li_vec=[model.log_Li for model in e.models]
 
-        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk)
+        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...)
     end
 
     take!(job_chan); put!(job_chan, nothing)

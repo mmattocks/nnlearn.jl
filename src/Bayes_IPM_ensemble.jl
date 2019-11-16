@@ -149,7 +149,7 @@ end
 #permutation routine function- 
 #general logic: receive array of permutation parameters, until a model more likely than the least is found:
 #randomly select a model from the ensemble (the least likely having been removed by this point), then sample new models by permuting with each of hte given parameter sets until a model more likely than the current contour is found
-#if none is found for the candidate model, move on to another candidate until the models_to_permute iterate is reached, after which return nothing for an error code
+#if none is found for the candidate model, move on to another candidate until the permute_limit iterate is reached, after which return nothing for an error code
 
 #four permutation modes: source (iterative random changes to sources until model lh>contour or iterate limit reached)
 #						-(iterates, weight shift freq per source base, length change freq per source, weight_shift_dist (a ContinuousUnivariateDistribution)) for permute params
@@ -159,12 +159,13 @@ end
 #						-(iterates) for init params
 #						merge (iteratively copy a source + mix matrix row from another model in the ensemble until lh>contour or iterate						limit reached)
 #						-(iterates) for merpge params
-function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{String,Any}}, models_to_permute::Int64, contour::Float64; reset=true)
-	for i = 1:models_to_permute
+function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64, contour::Float64; reset=true)
+	start=time()
+	for i = 1:permute_limit
 		m_record = rand(e.models)
 		m = deserialize(m_record.path)
 		original = deepcopy(m)
-		for (mode, params) in param_set
+		for (job, (mode, params)) in enumerate(param_set)
 			reset && (m = deepcopy(original))
 			if mode == "source"
 				permute_source!(m, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
@@ -177,10 +178,11 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 			else
 				@error "Malformed permute mode code! Current supported: \"source\", \"mix\", \"merge\", \"init\""
 			end
-			m.log_likelihood > contour && return m
+			step_report=()
+			m.log_likelihood > contour && return m, (time()-start, job/length(param_set), i/permute_limit, original.log_likelihood, m.log_likelihood, mode)
 		end
 	end
-	return nothing
+	return nothing, nothing
 end
 
 function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; reset=true)
@@ -193,12 +195,14 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 		contour, ll_idx = findmin([model.log_Li for model in models])
 		deleteat!(models, ll_idx)
 
+		start=time()
+
 		for i=1:permute_limit
 			m_record = rand(models)
 			job_model = remotecall_fetch(deserialize,librarian,m_record.path)
 			original = deepcopy(job_model)
 
-			for (mode, params) in param_set
+			for (job, (mode, params)) in enumerate(param_set)
 				reset && (job_model = deepcopy(original))
 				if mode == "source"
 					permute_source!(job_model, contour, e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, params...)
@@ -211,7 +215,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 				else
 					@error "Malformed permute mode code! Current supported: \"source\", \"mix\", \"merge\", \"init\""
 				end
-				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id)); break; break)
+				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id, (time()-start, job/length(param_set), i/permute_limit, original.log_likelihood, job_model.log_likelihood, mode))); break; break)
 				wait(job_chan)
 				fetch(job_chan)!=models && (break; break) #if the ensemble has changed during the search, update it
 			end

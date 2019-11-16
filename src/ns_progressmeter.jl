@@ -25,19 +25,19 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     workers::Vector{Int64}
     worker_totals::Vector{Int64}
     worker_li_delta::Vector{Float64}
-    worker_times::Vector{Float64}
     job_exhaust::Vector{Float64}
     model_exhaust::Vector{Float64}
-    worker_eff::Vector{Float64}
+    worker_eff::Vector{Vector{Float64}}
     worker_jobs::Vector{String}
     SMiMeI::Vector{Int64}
-    mean_step_time::Float64
+    mean_stp_time::Float64
+    eff_iterates::Int64
 
     function ProgressNS{T}(    naive::Float64,
                                interval::T,
                                workers::Vector{Int64};
                                dt::Real=0.1,
-
+                               eff_iterates::Int64,
                                desc::AbstractString="Nested Sampling: ",
                                color::Symbol=:green,
                                output::IO=stderr,
@@ -45,31 +45,63 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                start_it::Int=1) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, 0., printed, desc, color, output, 0, offset,0.,0.,0.,0.,0.,naive,[0.],0,workers,zeros(Int64,length(workers)),zeros(length(workers)),zeros(length(workers)),zeros(length(workers)),["" for worker in 1:length(workers)],zeros(Int64,length(workers)),0.)
+        new{T}(interval,
+         dt,
+         start_it,
+         start_it,
+         false,
+         tfirst,
+         tlast,
+         0., 
+         printed, 
+         desc,
+         color,
+         output,
+         0,
+         offset,
+         0.,0.,0.,0.,0.,
+         naive,
+         [0.],
+         0,
+         workers,
+         zeros(Int64,length(workers)),
+         zeros(length(workers)),
+         zeros(length(workers)),
+         zeros(length(workers)),
+         [Vector{Float64}() for i in 1:length(workers)],
+         ["" for worker in 1:length(workers)],
+         zeros(Int64,4),
+         0.,
+         eff_iterates)
     end
 end
 
 ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1, desc::AbstractString="Nested Sampling: ",
-         color::Symbol=:green, output::IO=stderr;
-         offset::Integer=0, start_it::Integer=1) = ProgressNS{typeof(interval)}(naive, interval, dt=dt, desc=desc, color=color, output=output, offset=offset, start_it=start_it)
+         color::Symbol=:green, output::IO=stderr, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = 
+            ProgressNS{typeof(interval)}(naive, interval, workers, dt=dt, eff_iterates=eff_iterates, desc=desc, color=color, output=output, offset=offset, start_it=start_it)
 
-ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1) = ProgressNS{typeof(interval)}(naive, interval, desc=desc, offset=offset, start_it=start_it)
+ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates)
 
-function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, time, jex, mex, old_li, new_li, instruction; options...)
+function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, jex, mex, old_li, new_li, instruction; options...)
+    
     instruction == "source" && (p.SMiMeI[1]+=1)
     instruction == "mix" && (p.SMiMeI[2]+=1)
     instruction == "merge" && (p.SMiMeI[3]+=1)
     instruction == "init" && (p.SMiMeI[4]+=1)
 
+    p.counter += 1
     stps_elapsed=p.counter-p.start_it
     p.tstp=time()-p.tlast
     p.mean_stp_time=(p.tlast-p.tfirst)/stps_elapsed
 
-    widx=findfirst(p.workers, worker)
+    widx=findfirst(isequal(worker), p.workers)
     p.worker_totals[widx]+=1
-    p.worker_times[widx]+=p.tstp
+    li_delta=new_li-old_li
+
     p.worker_li_delta[widx]+=new_li-old_li
-    p.worker_eff[widx]=(p.worker_li_delta[widx]/stps_elapsed)/(p.worker_times[widx]/p.worker_totals[widx])
+
+    push!(p.worker_eff[widx],li_delta/wk_time)
+    length(p.worker_eff[widx])>p.eff_iterates && (p.worker_eff[widx]=p.worker_eff[widx][end-p.eff_iterates+1:end]) #keep worker efficiency array under iterate size limit
     p.job_exhaust[widx]=jex; p.model_exhaust[widx]=mex
     p.worker_jobs[widx]=instruction
 
@@ -86,7 +118,6 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     p.information = info
     p.li_dist=li_dist
     p.stepworker = worker
-    p.counter += 1
     updateProgress!(p; options...)
 end
 
@@ -118,14 +149,14 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
 
-        wk_msgs = [@sprintf "Wk %i J: %s JE: %s.2f ME: %s.2f" p.workers[widx] p.worker_jobs[widx], p.job_exhaust[widx], p.model_exhaust[widx] for widx in 1:length(p.workers)]
-        wk_inst=UnicodePlots.barplot(wk_msgs, p.worker_eff, title="Worker Diagnostics", color=:magenta)
+        wk_msgs = [@sprintf "Wk:%g:: J:%s JE:%.2f ME:%.2f T:%i" p.workers[widx] p.worker_jobs[widx] p.job_exhaust[widx] p.model_exhaust[widx] p.worker_totals[widx] for widx in 1:length(p.workers)]
+        wk_inst=UnicodePlots.boxplot(wk_msgs, p.worker_eff, title="Worker Diagnostics", color=:magenta)
         
-        msg1 = @sprintf "%s (Step %i::Wk:%g Time μ,Δ: (%s,%s) CI: %g ETC: %s)" p.desc p.counter p.stepworker hmss(p.mean_step_time) hmss(p.tstp-p.mean_step_time) p.interval hmss(p.etc)
+        msg1 = @sprintf "%s (Step %i::Wk:%g: S:Mi:Me:I::%s:%s:%s:%s Time μ,Δ: (%s,%s) CI: %g ETC: %s)" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
         msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
         hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
-        p.numprintedvalues=nrows(hist.graphics)+nrows(wk_inst.graphics)+8
+        p.numprintedvalues=nrows(hist.graphics)+nrows(wk_inst.graphics)+10
 
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
