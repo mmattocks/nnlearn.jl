@@ -148,7 +148,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
-        wk_msgs = [@sprintf "Wk:%g:: J:%s JE:%.2f ME:%.3f T:%i" p.workers[widx] p.worker_jobs[widx] p.job_exhaust[widx] p.model_exhaust[widx] Int(floor(p.worker_totals[widx]/p.counter-p.start_it)) for widx in 1:length(p.workers)]
+        wk_msgs = [@sprintf "Wk:%g:: J:%s JE:%.2f ME:%.3f T:%i" p.workers[widx] p.worker_jobs[widx] p.job_exhaust[widx] p.model_exhaust[widx] Int(floor(p.worker_totals[widx]/(p.counter-p.start_it))) for widx in 1:length(p.workers)]
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.worker_eff, title="Worker Diagnostics", color=:magenta)
         
         msg1 = @sprintf "%s Step %i::Wk:%g: S|Mi|Me|I:%s|%s|%s|%s Time μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
