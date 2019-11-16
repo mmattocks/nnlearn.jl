@@ -8,7 +8,6 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     tfirst::Float64
     tlast::Float64
     tstp::Float64
-    over::Bool
     printed::Bool        # true if we have issued at least one status update
     desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
@@ -23,10 +22,22 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     naive::Float64
     li_dist::Vector{Float64}
     stepworker::Int64
+    workers::Vector{Int64}
+    worker_totals::Vector{Int64}
+    worker_li_delta::Vector{Float64}
+    worker_times::Vector{Float64}
+    job_exhaust::Vector{Float64}
+    model_exhaust::Vector{Float64}
+    worker_eff::Vector{Float64}
+    worker_jobs::Vector{String}
+    SMiMeI::Vector{Int64}
+    mean_step_time::Float64
 
     function ProgressNS{T}(    naive::Float64,
-                               interval::T;
+                               interval::T,
+                               workers::Vector{Int64};
                                dt::Real=0.1,
+
                                desc::AbstractString="Nested Sampling: ",
                                color::Symbol=:green,
                                output::IO=stderr,
@@ -34,17 +45,34 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                start_it::Int=1) where T
         tfirst = tlast = time()
         printed = false
-        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, 0.0, false, printed, desc, color, output, 0, offset,0.0,0.0,0.0,0.0,0.0,naive,[0.0],0)
+        new{T}(interval, dt, start_it, start_it, false, tfirst, tlast, 0., printed, desc, color, output, 0, offset,0.,0.,0.,0.,0.,naive,[0.],0,workers,zeros(Int64,length(workers)),zeros(length(workers)),zeros(length(workers)),zeros(length(workers)),["" for worker in 1:length(workers)],zeros(Int64,length(workers)),0.)
     end
 end
 
-ProgressNS(naive::Float64, interval::Real, dt::Real=0.1, desc::AbstractString="Nested Sampling: ",
+ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1, desc::AbstractString="Nested Sampling: ",
          color::Symbol=:green, output::IO=stderr;
          offset::Integer=0, start_it::Integer=1) = ProgressNS{typeof(interval)}(naive, interval, dt=dt, desc=desc, color=color, output=output, offset=offset, start_it=start_it)
 
-ProgressNS(naive::Float64, interval::Real, desc::AbstractString, offset::Integer=0, start_it::Integer=1) = ProgressNS{typeof(interval)}(naive, interval, desc=desc, offset=offset, start_it=start_it)
+ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1) = ProgressNS{typeof(interval)}(naive, interval, desc=desc, offset=offset, start_it=start_it)
 
-function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker; options...)
+function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, time, jex, mex, old_li, new_li, instruction; options...)
+    instruction == "source" && (p.SMiMeI[1]+=1)
+    instruction == "mix" && (p.SMiMeI[2]+=1)
+    instruction == "merge" && (p.SMiMeI[3]+=1)
+    instruction == "init" && (p.SMiMeI[4]+=1)
+
+    stps_elapsed=p.counter-p.start_it
+    p.tstp=time()-p.tlast
+    p.mean_stp_time=(p.tlast-p.tfirst)/stps_elapsed
+
+    widx=findfirst(p.workers, worker)
+    p.worker_totals[widx]+=1
+    p.worker_times[widx]+=p.tstp
+    p.worker_li_delta[widx]+=new_li-old_li
+    p.worker_eff[widx]=(p.worker_li_delta[widx]/stps_elapsed)/(p.worker_times[widx]/p.worker_totals[widx])
+    p.job_exhaust[widx]=jex; p.model_exhaust[widx]=mex
+    p.worker_jobs[widx]=instruction
+
     p.contour = contour
     p.max_lh = max
 
@@ -52,19 +80,13 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     step = p.interval - interval
     !isinf(step) && step>0 && (p.total_step+=step)
 
-    stps_elapsed=p.counter-p.start_it
-
-    now=time()
-    p.tstp=now-p.tlast
-    mean_stp_time=(p.tlast-p.tfirst)/stps_elapsed
-    p.tstp > mean_stp_time ? (p.over=true) : (p.over=false)
-    p.etc= (p.interval/(p.total_step/stps_elapsed))*mean_stp_time
+    p.etc= (p.interval/(p.total_step/stps_elapsed))*p.mean_stp_time
 
     p.interval=interval
     p.information = info
-    p.counter += 1
     p.li_dist=li_dist
     p.stepworker = worker
+    p.counter += 1
     updateProgress!(p; options...)
 end
 
@@ -95,13 +117,23 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
-        msg = @sprintf "%s (Step %i::Wk:%g (%s,%s) LC: %g MELH: %g NLR: %g H: %g CI: %g ETC: %s)" p.desc p.counter p.stepworker hmss(p.tstp) (p.over ? "+" : "-") p.contour p.max_lh (p.max_lh-p.naive) p.information p.interval hmss(p.etc)
-        hist=UnicodePlots.histogram(p.li_dist)
-        p.numprintedvalues=nrows(hist.graphics)+4
+
+        wk_msgs = [@sprintf "Wk %i J: %s JE: %s.2f ME: %s.2f" p.workers[widx] p.worker_jobs[widx], p.job_exhaust[widx], p.model_exhaust[widx] for widx in 1:length(p.workers)]
+        wk_inst=UnicodePlots.barplot(wk_msgs, p.worker_eff, title="Worker Diagnostics", color=:magenta)
+        
+        msg1 = @sprintf "%s (Step %i::Wk:%g Time μ,Δ: (%s,%s) CI: %g ETC: %s)" p.desc p.counter p.stepworker hmss(p.mean_step_time) hmss(p.tstp-p.mean_step_time) p.interval hmss(p.etc)
+        msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
+
+        hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
+        p.numprintedvalues=nrows(hist.graphics)+nrows(wk_inst.graphics)+8
 
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
-        ProgressMeter.printover(p.output, msg, p.color)
+        show(p.output, wk_inst)
+        print(p.output, "\n")
+        ProgressMeter.printover(p.output, msg1, :magenta)
+        print(p.output, "\n")
+        ProgressMeter.printover(p.output, msg2, p.color)
         print(p.output, "\n")
         show(p.output, hist)
         print(p.output, "\n")
