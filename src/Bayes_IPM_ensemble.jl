@@ -179,7 +179,7 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 				@error "Malformed permute mode code! Current supported: \"source\", \"mix\", \"merge\", \"init\""
 			end
 			step_report=()
-			m.log_likelihood > contour && return m, (time()-start, job/length(param_set), i/permute_limit, original.log_likelihood, m.log_likelihood, mode)
+			m.log_likelihood > contour && return m, (time()-start, job, i, original.log_likelihood, m.log_likelihood, mode)
 		end
 	end
 	return nothing, nothing
@@ -215,7 +215,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 				else
 					@error "Malformed permute mode code! Current supported: \"source\", \"mix\", \"merge\", \"init\""
 				end
-				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id, (time()-start, job/length(param_set), i/permute_limit, original.log_likelihood, job_model.log_likelihood, mode))); break; break)
+				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id, (time()-start, job, i, original.log_likelihood, job_model.log_likelihood, mode))); break; break)
 				wait(job_chan)
 				fetch(job_chan)!=models && (break; break) #if the ensemble has changed during the search, update it
 			end
