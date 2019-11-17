@@ -326,7 +326,7 @@ end
     @test sp_logZ > -104.0
 
 
-    @info "Testing multiprocess convergence (error expected)..."
+    @info "Testing multiprocess convergence..."
     @info "Spawning worker pool..."
     librarians=addprocs(1)
     worker_pool=addprocs(2)
@@ -334,7 +334,7 @@ end
     @everywhere Random.seed!(1)
     
     ####CONVERGE############
-    final_logZ = nnlearn.ns_converge!(ensemble, [param_set, param_set], permute_limit, librarians, worker_pool, 25., backup=(true,250))
+    final_logZ = nnlearn.ns_converge!(ensemble, [param_set, param_set], permute_limit, librarians, worker_pool, .1, backup=(true,250))
 
     rmprocs(worker_pool)
     rmprocs(librarians)
@@ -347,9 +347,9 @@ end
     for i in 1:length(ensemble.log_Zi)-1
         @test ensemble.log_Zi[i] <= ensemble.log_Zi[i+1]
     end
-    @test typeof(final_logZ) == nnlearn.Bayes_IPM_ensemble
+    @test typeof(final_logZ) == Float64
 
-    @info "Worker exhaustion confirmed. Tests done!"
+    @info "Tests complete!"
 
     rm(ensembledir, recursive=true)
     rm(spensembledir, recursive=true)

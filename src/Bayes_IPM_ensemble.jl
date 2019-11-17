@@ -198,6 +198,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 		start=time()
 
 		for i=1:permute_limit
+			found::Bool=false
 			m_record = rand(models)
 			job_model = remotecall_fetch(deserialize,librarian,m_record.path)
 			original = deepcopy(job_model)
@@ -215,11 +216,12 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 				else
 					@error "Malformed permute mode code! Current supported: \"source\", \"mix\", \"merge\", \"init\""
 				end
-				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id, (time()-start, job, i, original.log_likelihood, job_model.log_likelihood, mode))); break; break)
+				job_model.log_likelihood > contour && (put!(models_chan, (job_model,id, (time()-start, job, i, original.log_likelihood, job_model.log_likelihood, mode))); found=true; break)
 				wait(job_chan)
 				fetch(job_chan)!=models && (break; break) #if the ensemble has changed during the search, update it
 			end
-		i==permute_limit && (put!(models_chan,nothing);persist=false)#worker to put nothing on channel if it fails to find a model more likely than contour
+			found==true && break;
+			i==permute_limit && (put!(models_chan,nothing);persist=false)#worker to put nothing on channel if it fails to find a model more likely than contour
 		end
 	end
 end
