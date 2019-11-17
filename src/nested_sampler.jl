@@ -18,7 +18,7 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64; wk
         candidate,step_report=run_permutation_routine(e, param_set, permute_limit, ll_contour, instruction_rand=wkrand)
         if !(candidate===nothing)
             model_selected=true
-            new_model_record = Model_Record(string(e.ensemble_directory,'/',e.model_counter), candidate.log_likelihood);
+            new_model_record = Model_Record(string(e.path,'/',e.model_counter), candidate.log_Li);
             push!(e.models, new_model_record);
             serialize(new_model_record.path, candidate)
             e.model_counter +=1
@@ -63,9 +63,9 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
         model_tuple = take!(model_chan)
         if !(model_tuple===nothing)
             candidate,wk,step_report=model_tuple
-            if candidate.log_likelihood > ll_contour
+            if candidate.log_Li > ll_contour
                 model_selected=true
-                new_model_record = Model_Record(string(e.ensemble_directory,'/',e.model_counter), candidate.log_likelihood);
+                new_model_record = Model_Record(string(e.path,'/',e.model_counter), candidate.log_Li);
                 push!(e.models, new_model_record);
                 serialize(new_model_record.path, candidate)
                 e.model_counter +=1
@@ -107,7 +107,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
                 (@error "All workers failed to find new models, aborting at current iterate."; return e) #if there is a warning, iust return the ensemble and print info
         iterate += 1
 
-        backup[1] && iterate%backup[2] == 0 && serialize(string(e.ensemble_directory,'/',"ens"), e) #every backup interval, serialise the ensemble
+        backup[1] && iterate%backup[2] == 0 && serialize(string(e.path,'/',"ens"), e) #every backup interval, serialise the ensemble
 
         Li_vec=[model.log_Li for model in e.models]
 
@@ -151,7 +151,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
         take!(job_chan); put!(job_chan,e.models)
 
-        backup[1] && iterate%backup[2] == 0 && serialize(string(e.ensemble_directory,'/',"ens"), e) #every backup interval, serialise the ensemble
+        backup[1] && iterate%backup[2] == 0 && serialize(string(e.path,'/',"ens"), e) #every backup interval, serialise the ensemble
 
         Li_vec=[model.log_Li for model in e.models]
 

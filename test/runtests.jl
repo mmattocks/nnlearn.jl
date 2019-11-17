@@ -166,9 +166,10 @@ end
     log_motif_expectation = log(0.5 / size(bg_scores)[1])
     obs_source_indices = findall(mix_matrix[o,:])
     obs_cardinality = length(obs_source_indices)
-    cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality))
+    penalty_sum = sum(exp.(fill(log_motif_expectation,obs_cardinality)))
+    cardinality_penalty=log(1.0-penalty_sum) 
 
-    lh_target = -26.821656935021238
+    lh_target = -8.87035766177774
 
     o1_lh = nnlearn.weave_scores(12, view(bg_scores,:,1), score_mat1, findall(mix_matrix[1,:]), source_wmls, log_motif_expectation, cardinality_penalty)
     @test isapprox(lh_target,o1_lh)
@@ -209,37 +210,39 @@ end
     
     sources_target::Vector{Tuple{Matrix{Float64},Int64}} = [([-3.71415 -5.82712 -2.38886 -0.126762; -0.834566 -2.06535 -0.852383 -4.361], 2), ([-0.846903 -1.70222 -1.18194 -2.49741; -1.1486 -2.79613 -1.3878 -0.988191; -6.14759 -3.3357 -0.218022 -1.84412], 1), ([-8.17558 -0.0620875 -3.19203 -3.97233; -3.47489 -3.52956 -1.42089 -0.359224], 1)]
     mix_target = trues(2,3)
-    lh_target = -58.01626261977499
+    lh_target = -19.206179884165888
 
     for (s, source) in enumerate(test_model.sources)
         @test isapprox(source[1], sources_target[s][1], atol=9.0e-6)
     end
     @test test_model.mix_matrix == mix_target
-    @test test_model.log_likelihood == lh_target
+    @test test_model.log_Li == lh_target
     
     ps_model = deepcopy(test_model)
-    nnlearn.permute_source!(ps_model, lh_target, obs, obsl, bg_scores, source_priors, 100,1.,.5)
-    @test ps_model.log_likelihood > test_model.log_likelihood
+    nnlearn.permute_source!(ps_model, lh_target, obs, obsl, bg_scores, source_priors, 100,.3,.5)
+    @test ps_model.log_Li > test_model.log_Li
 
     pm_model = deepcopy(test_model)
-    nnlearn.permute_mix!(pm_model, lh_target, obs, obsl, bg_scores, source_priors, 100)
-    @test (pm_model.log_likelihood > test_model.log_likelihood) || pm_model.log_likelihood===-Inf
+    for i=1:100
+        nnlearn.permute_mix!(pm_model, lh_target, obs, obsl, bg_scores, source_priors, 100)
+    end
+    @test (pm_model.log_Li > test_model.log_Li) || pm_model.log_Li===-Inf
 
     reinit_model = deepcopy(test_model)
     nnlearn.reinit_sources!(reinit_model, lh_target, obs, obsl, bg_scores, source_priors, (falses(0,0),mix_prior), 500)
-    @test reinit_model.log_likelihood > test_model.log_likelihood
+    @test reinit_model.log_Li > test_model.log_Li
 
     uninform_priors = nnlearn.assemble_source_priors(3, Vector{Matrix{Float64}}(), 4.0, src_length_limits)
     ui_model = nnlearn.ICA_PWM_model("ui", uninform_priors, (falses(0,0),mix_prior), bg_scores, obs, src_length_limits)
-    merge_target = ui_model.log_likelihood
+    merge_target = ui_model.log_Li
 
     path=randstring()
-    test_record = nnlearn.Model_Record(path, test_model.log_likelihood)
-    serialize(path, test_model)
+    test_record = nnlearn.Model_Record(path, pm_model.log_Li)
+    serialize(path, pm_model)
 
     nnlearn.merge_model!(1,[test_record],ui_model,merge_target,obs,obsl,bg_scores,500)
 
-    @test ui_model.log_likelihood > merge_target
+    @test ui_model.log_Li > merge_target
 
     rm(path)
 end
@@ -259,19 +262,19 @@ end
 
     src_length_limits=2:12
 
-    source_priors = nnlearn.assemble_source_priors(60, [source_pwm, source_pwm_2], 4.0, src_length_limits)
+    source_priors = nnlearn.assemble_source_priors(4, [source_pwm, source_pwm_2], 4.0, src_length_limits)
     mix_prior=.5
 
     bg_scores = log.(fill(.5, (12,9)))
-    obs=[BioSequences.DNASequence("CCGTTGACGATG")
-    BioSequences.DNASequence("CCCCGATGATGA")
-    BioSequences.DNASequence("CCCCGATGATGA")
-    BioSequences.DNASequence("TCATCATGCTGA")
-    BioSequences.DNASequence("TGATGAATCTGA")
-    BioSequences.DNASequence("CCCCGATTTTGA")
-    BioSequences.DNASequence("TCATGGGCTGAA")
-    BioSequences.DNASequence("TCATCCTGCTGA")
-    BioSequences.DNASequence("TGATGAATAAAG")
+    obs=[BioSequences.DNASequence("CCGTTGACGATGTGATGAATAAAG")
+    BioSequences.DNASequence("CCCCGATGATGACCGTTGACGATG")
+    BioSequences.DNASequence("CCCCGATGATGACCCCGATTTTGA")
+    BioSequences.DNASequence("TCATCATGCTGATGATGAATAAAG")
+    BioSequences.DNASequence("TGATGAATCTGACCCCGATTTTGA")
+    BioSequences.DNASequence("CCCCGATTTTGATGATGAATAAAG")
+    BioSequences.DNASequence("TCATGGGCTGAACCGTTGACGATG")
+    BioSequences.DNASequence("TCATCCTGCTGACCCCGATTTTGA")
+    BioSequences.DNASequence("TGATGAATAAAGTCATCCTGCTGA")
     ]
     
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
@@ -286,12 +289,12 @@ end
 
     @test length(ensemble.models) == 200
     for model in ensemble.models
-        @test -150 < model.log_Li < -25
+        @test -175 < model.log_Li < -25
     end
 
     @test length(sp_ensemble.models) == 200
     for model in sp_ensemble.models
-        @test -150 < model.log_Li < -25
+        @test -175 < model.log_Li < -25
     end
 
     assembler=addprocs(1)
@@ -303,7 +306,7 @@ end
 
     @test length(dist_ensemble.models) == 200
     for model in ensemble.models
-        @test -150 < model.log_Li < -25
+        @test -1750 < model.log_Li < -25
     end
 
     rmprocs(assembler)
@@ -323,7 +326,7 @@ end
     for i in 1:length(sp_ensemble.log_Zi)-1
         @test sp_ensemble.log_Zi[i] <= sp_ensemble.log_Zi[i+1]
     end
-    @test sp_logZ > -104.0
+    @test sp_logZ > -140.0
 
 
     @info "Testing multiprocess convergence..."
@@ -348,6 +351,7 @@ end
         @test ensemble.log_Zi[i] <= ensemble.log_Zi[i+1]
     end
     @test typeof(final_logZ) == Float64
+    @test sp_logZ > -140.0
 
     @info "Tests complete!"
 

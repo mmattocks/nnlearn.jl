@@ -4,7 +4,7 @@ mutable struct ICA_PWM_model
     informed_sources::Int64 #number of sources with informative priors- these are not subject to frequency sorting in model mergers
     source_length_limits::UnitRange{Int64} #min/max source lengths for init and permutation
     mix_matrix::BitMatrix # obs x sources bool matrix
-    log_likelihood::Float64
+    log_Li::Float64
 end
 
 #ICA_PWM_model FUNCTIONS
@@ -84,8 +84,14 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observati
                 score_mat=score_obs_sources(sources[mixview], observations[1:obsl,o], obsl, mixwmls, revcomp=revcomp)
                 obs_source_indices = findall(mixview)
                 obs_cardinality = length(obs_source_indices) #the more sources, the greater the cardinality_penalty
-                obs_cardinality > 0 ? cardinality_penalty = logsumexp(fill(log_motif_expectation, obs_cardinality)) : cardinality_penalty = 0.0
-                    
+                if obs_cardinality > 0 
+                    penalty_sum = sum(exp.(fill(log_motif_expectation,obs_cardinality)))
+                    penalty_sum > 1. && (penalty_sum=1.)
+                    cardinality_penalty=log(1.0-penalty_sum)
+                else
+                    cardinality_penalty=0.0
+                end
+
                 obs_lhs[t][i]=weave_scores(obsl, view(bg_scores,:,o), score_mat, obs_source_indices, mixwmls, log_motif_expectation, cardinality_penalty, revcomp)
             end
         end
@@ -141,7 +147,7 @@ end
                 
                     @inbounds for i in 2:L #i=1 is ithe lh_vec initializing 0, i=2 is the score of the first background position (ie t=1)
                         t=i-1
-                        score = lh_vec[i-1] + bg_scores[t] + cardinality_penalty
+                        score = CLHMM.lps(lh_vec[i-1], bg_scores[t], cardinality_penalty)
                 
                         if length(osi_emitting)<length(obs_source_indices)
                             for n in 1:length(obs_source_indices)
@@ -172,18 +178,18 @@ end
 #DECORRELATION FUNCTIONS
 #random permutation of single sources until model with log likelihood>contour found or iterates limit reached. will always produce at least one weight shift per iteration for weight_shift_freq>0, more than this or length changes depend on the suppied probabilities. one length change per iterate
 function permute_source!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=length(m.sources), weight_shift_freq::Float64=.1, length_change_freq::Float64=.3, weight_shift_dist::Distributions.ContinuousUnivariateDistribution=Weibull(1.5,.1)) #weight_shift_dist is given in decimal probability values- converted to log space in permute_source_lengths!
-    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+    m.log_Li = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
     a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
     clean=Vector{Bool}(trues(O))
 
-    while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+    while m.log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         source_no = rand(1:length(m.sources))
         weight_shift_freq > 0 && permute_source_weights!(source_no, m.mix_matrix, m.sources, weight_shift_freq, weight_shift_dist, clean)
         rand() < length_change_freq && permute_source_length!(source_no, m.mix_matrix, m.sources, priors, m.source_length_limits, clean)
-        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean)
+        m.log_Li, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean)
         iterate += 1
     end
 end
@@ -272,7 +278,7 @@ end
                 end
 
 function permute_mix!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=10, mix_move_range::UnitRange=Int(ceil(.001*length(m.mix_matrix))):Int(ceil(.1*length(m.mix_matrix)))) #shift_dist is given in decimal probability values- converted to log space in permute_source_lengths!
-    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+    m.log_Li = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
@@ -280,7 +286,7 @@ function permute_mix!(m::ICA_PWM_model, contour::Float64, observations::Matrix{I
     clean=Vector{Bool}(trues(O))
     dirty=false
 
-    while (m.log_likelihood < contour || !dirty) && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+    while (m.log_Li < contour || !dirty) && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         mix_moves=rand(mix_move_range)
         mix_moves > length(m.mix_matrix) && (mix_moves = length(m.mix_matrix))
     
@@ -291,7 +297,7 @@ function permute_mix!(m::ICA_PWM_model, contour::Float64, observations::Matrix{I
         clean=Vector{Bool}(trues(O)-positive_indices)
         if any(positive_indices) #if there are any such indices
             m.mix_matrix[positive_indices,:]=candidate_mix[positive_indices,:] #assign the mix vectors for those obs to the model
-            m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #calculate the new model
+            m.log_Li, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #calculate the new model
             dirty=true
         end
         iterate += 1
@@ -305,14 +311,14 @@ end
 
 #iterative merging with other models in the ensemble
 function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
-    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+    m.log_Li = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
     a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
     clean=Vector{Bool}(trues(O))
 
-    while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+    while m.log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         merger_m = deserialize(rand(models).path) #randomly select a model to merge
         s = rand(1:S) #randomly select a source to merge
         if s > m.informed_sources #if the source is on an uninformative prior, the merger model source will be selected by mixvector similarity
@@ -324,23 +330,21 @@ function merge_model!(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, co
 
         clean[m.mix_matrix[:,s]].=false #mark dirty any obs that start with the source
         m.sources[s] = merger_m.sources[merge_s] #copy the source
-        m.mix_matrix[:,s] = merger_m.mix_matrix[:,merge_s] #copy the mix for the source
-        clean[m.mix_matrix[:,s]].=false #mark dirty any obs that end with hte source
 
-        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #assess likelihood
+        m.log_Li, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #assess likelihood
         iterate += 1
     end
 end
 
 function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, iterates::Int64)
-    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+    m.log_Li = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
 
     a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
     clean=Vector{Bool}(trues(O))
 
-    while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+    while m.log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         merger_m = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge
         s = rand(1:S) #randomly select a source in the model to merge
         if s > m.informed_sources #if the source is on an uninformative prior, the merger model source will be selected by mixvector similarity
@@ -355,20 +359,20 @@ function merge_model!(librarian::Int64, models::Vector{nnlearn.Model_Record}, m:
         m.mix_matrix[:,s] = merger_m.mix_matrix[:,merge_s] #copy the mix for the source
         clean[m.mix_matrix[:,s]].=false #mark dirty any obs that end with hte source
 
-        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #assess likelihood
+        m.log_Li, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #assess likelihood
         iterate += 1
     end
 end
 
 #iterative source reinitialisation from priors
 function reinit_sources!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, iterates::Int64)
-    m.log_likelihood = -Inf; iterate = 1 #init for iterative likelihood search
+    m.log_Li = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1; S = length(m.sources)
 
     a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
     clean=Vector{Bool}(trues(O))
 
-    while m.log_likelihood < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+    while m.log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         s_to_reinit=rand(1:S) # pick a random source to reinitialise
         clean[m.mix_matrix[:,s_to_reinit]].=false #mark dirty any obs that have the source before the renitialization
 
@@ -378,7 +382,7 @@ function reinit_sources!(m::ICA_PWM_model, contour::Float64, observations::Matri
             m.mix_matrix[:,s_to_reinit] = init_mix_matrix((falses(0,0),mix_prior[2]),O,1) #otherwise initialize the source's mix vector from the uninformative prior
         clean[m.mix_matrix[:,s_to_reinit]].=false #mark dirty any obs that have the source after the reinitialization
 
-        m.log_likelihood, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #assess likelihood
+        m.log_Li, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean) #assess likelihood
         iterate += 1
     end
 end

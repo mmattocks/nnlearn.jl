@@ -31,7 +31,7 @@ const source_max_bases = Int(ceil(position_size/2))
 const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .07
 @assert mixing_prior >= 0 && mixing_prior <= 1
-const models_to_permute = ensemble_size * 10
+const models_to_permute = ensemble_size * 3
 const permute_params = [
     [
         ("source",(no_sources, .2, .3)),
