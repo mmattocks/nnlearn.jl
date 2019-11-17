@@ -36,7 +36,7 @@ O=1000;S=50
         end
     end
 
-    test_mix=nnlearn.init_mixing_matrix((falses(0,0),0.5), 2, 10)
+    test_mix=nnlearn.init_mix_matrix((falses(0,0),0.5), 2, 10)
 
     permuted_weight_sources=deepcopy(test_sources)
     clean = Vector{Bool}(trues(2))
@@ -65,13 +65,13 @@ end
 @testset "Mix matrix initialisation and manipulation functions" begin
     #test mix matrix init
 
-    prior_mix_test=nnlearn.init_mixing_matrix((trues(2,10),0.0),2, 20)
+    prior_mix_test=nnlearn.init_mix_matrix((trues(2,10),0.0),2, 20)
     @test all(prior_mix_test[:,1:10])
     @test !any(prior_mix_test[:,11:20])
 
-    @test sum(nnlearn.init_mixing_matrix((falses(0,0),1.0), O, S)) == O*S
-    @test sum(nnlearn.init_mixing_matrix((falses(0,0),0.0), O, S)) == 0
-    @test 0 < sum(nnlearn.init_mixing_matrix((falses(0,0),0.5), O, S)) < O*S
+    @test sum(nnlearn.init_mix_matrix((falses(0,0),1.0), O, S)) == O*S
+    @test sum(nnlearn.init_mix_matrix((falses(0,0),0.0), O, S)) == 0
+    @test 0 < sum(nnlearn.init_mix_matrix((falses(0,0),0.5), O, S)) < O*S
 
     #test mix matrix decorrelation
     empty_mix = falses(O,S)
@@ -214,7 +214,7 @@ end
     for (s, source) in enumerate(test_model.sources)
         @test isapprox(source[1], sources_target[s][1], atol=9.0e-6)
     end
-    @test test_model.mixing_matrix == mix_target
+    @test test_model.mix_matrix == mix_target
     @test test_model.log_likelihood == lh_target
     
     ps_model = deepcopy(test_model)
@@ -313,7 +313,7 @@ end
     param_set = [("source",(10,.25,.5)),("mix",(10)),("merge",(10)),("init",(10))]
 
     @info "Testing threaded convergence..."
-    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, .1)
+    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 1., wkrand=true)
 
     @test length(sp_ensemble.models) == 200
     @test length(sp_ensemble.log_Li) == length(sp_ensemble.log_Xi) == length(sp_ensemble.log_wi) == length(sp_ensemble.log_Liwi) == length(sp_ensemble.log_Zi) == length(sp_ensemble.Hi) == sp_ensemble.model_counter-200
@@ -334,7 +334,7 @@ end
     @everywhere Random.seed!(1)
     
     ####CONVERGE############
-    final_logZ = nnlearn.ns_converge!(ensemble, [param_set, param_set], permute_limit, librarians, worker_pool, .1, backup=(true,250))
+    final_logZ = nnlearn.ns_converge!(ensemble, [param_set, param_set], permute_limit, librarians, worker_pool, 10., backup=(true,250), wkrand=[false,true])
 
     rmprocs(worker_pool)
     rmprocs(librarians)

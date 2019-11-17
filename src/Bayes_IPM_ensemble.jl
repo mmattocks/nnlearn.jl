@@ -159,12 +159,14 @@ end
 #						-(iterates) for init params
 #						merge (iteratively copy a source + mix matrix row from another model in the ensemble until lh>contour or iterate						limit reached)
 #						-(iterates) for merpge params
-function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64, contour::Float64; reset=true)
+function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64, contour::Float64; instruction_rand=true, reset=true)
 	start=time()
 	for i = 1:permute_limit
 		m_record = rand(e.models)
 		m = deserialize(m_record.path)
 		original = deepcopy(m)
+		instruction_rand && shuffle!(param_set)
+
 		for (job, (mode, params)) in enumerate(param_set)
 			reset && (m = deepcopy(original))
 			if mode == "source"
@@ -185,7 +187,7 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 	return nothing, nothing
 end
 
-function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; reset=true)
+function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, param_set::Vector{Tuple{String,Any}}, permute_limit::Int64; instruction_rand=false, reset=true)
 	persist=true
 	id=myid()
 	while persist
@@ -202,6 +204,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 			m_record = rand(models)
 			job_model = remotecall_fetch(deserialize,librarian,m_record.path)
 			original = deepcopy(job_model)
+			instruction_rand && shuffle!(param_set)
 
 			for (job, (mode, params)) in enumerate(param_set)
 				reset && (job_model = deepcopy(original))

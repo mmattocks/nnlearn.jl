@@ -9,7 +9,7 @@ module nnlearn
     import ProgressMeter: AbstractProgress
     import Printf: @sprintf
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
-    import Random: rand, seed!
+    import Random: rand, seed!, shuffle!
 
     mutable struct Model_Record #record struct to associate a log_Li with a saved, calculated model
         path::String

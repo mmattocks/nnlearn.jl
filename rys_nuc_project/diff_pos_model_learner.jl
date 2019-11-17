@@ -51,9 +51,12 @@ const permute_params = [
     [
         ("source",(no_sources, .2, .3)),
         ("source",(no_sources, .8, 1.)),
+        ("mix",(no_sources)),
+        ("merge",(no_sources)),
         ("init",(no_sources))
     ] #worker 8
 ]
+worker_instruction_rand=[false,false,false,true]
 
 const prior_wt=3.0
 
@@ -104,7 +107,7 @@ isfile(string(sib_ensemble,'/',"ens")) ? (sib_e = deserialize(string(sib_ensembl
     (sib_e = nnlearn.Bayes_IPM_ensemble(worker_pool, sib_ensemble, ensemble_size, sib_source_priors, (sib_mix_prior, mixing_prior), sib_matrix, sib_obs, source_length_range))
 
 @info "Learning differential sib motifs by nested sampling of posterior..."
-nnlearn.ns_converge!(sib_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
+nnlearn.ns_converge!(sib_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5), wkrand=worker_instruction_rand)
 serialize(string(sib_ensemble,'/',"ens"), sib_e)
 
 @info "Initialising rys ICA PWM model ensemble for nested sampling..."
@@ -112,7 +115,7 @@ isfile(string(rys_ensemble,'/',"ens")) ? (rys_e = deserialize(string(rys_ensembl
     (rys_e = nnlearn.Bayes_IPM_ensemble(worker_pool, rys_ensemble, ensemble_size, rys_source_priors, (rys_mix_prior, mixing_prior), rys_matrix, rys_obs, source_length_range))
 
 @info "Learning differential rys motifs by nested sampling of posterior..."
-nnlearn.ns_converge!(rys_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
+nnlearn.ns_converge!(rys_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5), wkrand=worker_instruction_rand)
 serialize(string(rys_ensemble,'/',"ens"), rys_e)
 
 @info "Initialising combined ICA PWM model ensemble for nested sampling..."
@@ -120,7 +123,7 @@ isfile(string(combined_ensemble,'/',"ens")) ? (combined_e = deserialize(string(c
     (combined_e = nnlearn.Bayes_IPM_ensemble(worker_pool, combined_ensemble, ensemble_size, combined_source_priors, (combined_mix_prior, mixing_prior), combined_matrix, combined_obs, source_length_range))
 
 @info "Learning combined motifs by nested sampling of posterior..."
-nnlearn.ns_converge!(combined_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5))
+nnlearn.ns_converge!(combined_e, permute_params, models_to_permute, librarians, worker_pool, backup=(true,5), wkrand=worker_instruction_rand)
 serialize(string(combined_ensemble,'/',"ens"), combined_e)
 
 rm(worker_pool)
