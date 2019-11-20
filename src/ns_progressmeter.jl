@@ -149,13 +149,13 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
         wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
-        wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", color=:magenta)
+        wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
         
         msg1 = @sprintf "%s Step %i::Wk:%g: S|Mi|Me|I:%s|%s|%s|%s T μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
         msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
         hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
-        p.numprintedvalues=nrows(hist.graphics)+nrows(wk_inst.graphics)+10
+        p.numprintedvalues=nrows(hist.graphics)+nrows(wk_inst.graphics)+11
 
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
