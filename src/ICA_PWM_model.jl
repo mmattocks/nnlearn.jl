@@ -216,7 +216,7 @@ end
 
                                 function wm_shift(pos_WM::Vector{Float64}, PWM_shift_dist::Distributions.ContinuousUnivariateDistribution)
                                     base_to_shift = rand(1:4) #pick a base to accumulate probability
-                                    permutation_sign = rand(-1:2:1)
+                                    permute_sign = rand(-1:2:1)
                                     shift_size = rand(PWM_shift_dist)
                                     new_wm=zeros(4)
                                     
@@ -225,14 +225,14 @@ end
                                             new_wm[base] =
                                             clamp(0, #no lower than 0 prob
                                             (pos_WM[base]          #selected PWM posn
-                                            + permutation_sign * shift_size), #randomly permuted by size param
+                                            + permute_sign * shift_size), #randomly permuted by size param
                                             1) #no higher than prob 1
                                         else
                                             size_frac = shift_size / 3 #other bases shifted in the opposite direction by 1/3 the shift accumulated at the base to permute
                                             new_wm[base] =
                                             clamp(0,
                                             (pos_WM[base]
-                                            - permutation_sign * size_frac),
+                                            - permute_sign * size_frac),
                                             1)
                                         end
                                     end
@@ -243,41 +243,60 @@ end
         
 
 
-                function permute_source_length!(source_no::Int64, mix::BitMatrix, sources::Vector{Tuple{Matrix{Float64},Int64}}, priors::Vector{Vector{Dirichlet{Float64}}}, length_limits::UnitRange{Int64}, clean::Vector{Bool}, uninformative::Dirichlet=Dirichlet([.25,.25,.25,.25]))
+                function permute_source_length!(source_no::Int64, mix::BitMatrix, sources::Vector{Tuple{Matrix{Float64},Int64}}, priors::Vector{Vector{Dirichlet{Float64}}}, length_limits::UnitRange{Int64}, clean::Vector{Bool}, permute_range::UnitRange{Int64}=1:3, uninformative::Dirichlet=Dirichlet([.25,.25,.25,.25]))
                     clean[mix[:,source_no]].=false #all obs with this source in the mix matrix will be dirty
                     source_PWM, prior_idx = sources[source_no]
-                    source_length = size(source_PWM)[1]
+                    source_length = size(source_PWM,1)
                     prior = priors[source_no]
 
-                    #randomly chose to extend or contract a source, but prevent an extension or contraction of a source at its length limit if the randomly chosen sign would violate it- in this case use the opposite sign
-                    permutation_sign = rand(-1:2:1)
-                    if source_length + permutation_sign > length_limits[2]
-                        permutation_sign = -1
-                    elseif source_length + permutation_sign < length_limits[2]
-                        permutation_sign = 1
+                    permute_sign, permute_length = get_length_params(source_length, length_limits, permute_range)
+
+                    permute_sign==1 ? permute_pos = rand(1:source_length+1) :
+                        permute_pos=rand(1:source_length-permute_length)
+                    
+                    if permute_sign == 1 #if we're to add positions to the PWM
+                        ins_WM=zeros(permute_length,4)
+                        for pos in 1:permute_length
+                            prior_position=permute_pos+prior_idx
+                            prior_position<1 || prior_position>length(prior) ? 
+                                ins_WM[pos,:] = log.(transpose(rand(uninformative))) :
+                                ins_WM[pos,:] = log.(transpose(rand(prior[prior_position])))
+                                !HMMBase.isprobvec(exp.(ins_WM[pos,:])) && throw(ErrorException,"Bad weight vector generated in permute_source_lengths!")
+                        end
+                        upstream_source=source_PWM[1:permute_pos-1,:]
+                        downstream_source=source_PWM[permute_pos:end,:]
+                        source_PWM=vcat(upstream_source,ins_WM,downstream_source)
+                        permute_pos==1 && (prior_idx-=permute_length)
+                    else #if we're to remove positions
+                        upstream_source=source_PWM[1:permute_pos-1,:]
+                        downstream_source=source_PWM[permute_pos+permute_length:end,:]
+                        source_PWM=vcat(upstream_source,downstream_source)
+                        permute_pos==1 && (prior_idx+=permute_length)
                     end
 
-                    rand() >= .5 ? permute_5_pr = true : permute_5_pr = false
-                    permute_5_pr==1 ? prior_position = prior_idx - 1 :
-                                        prior_position = prior_idx + length(source_PWM)
-                    
-                    if permutation_sign == 1 #if we're to add a position to the PWM
-                        prior_position<1 || prior_position>length(prior) ? #if it's outside the prior
-                            new_WM = log.(rand(uninformative)) : #the new position row is drawn from an uninformative prior
-                            new_WM = log.(rand(prior[prior_position])) #else it's drawn from the appropriate position
-                        @assert HMMBase.isprobvec(exp.(new_WM)) #assert that it's a valid probability vec
-                        permute_5_pr ? #if we're extending the 5' end of the matrix
-                            (source_PWM = vcat(transpose(new_WM), source_PWM); #push the new WM to the front
-                            prior_idx -= 1) :#and decrement the prior index 
-                            source_PWM = vcat(source_PWM, transpose(new_WM)) #if we're exending the 3' end, push it to the end 
-                    else #if we're to remove a position
-                        permute_5_pr ? (source_PWM=source_PWM[2:end,:] ; prior_idx += 1) :
-                                        source_PWM=source_PWM[1:end-1,:] #do it from the proper end, incrementing prior index for 5' subtraction
-                    end
                     sources[source_no] = (source_PWM, prior_idx) #update the sources vector
                 end
 
-function permute_mix!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=10, mix_move_range::UnitRange=Int(ceil(.001*length(m.mix_matrix))):Int(ceil(.1*length(m.mix_matrix)))) #shift_dist is given in decimal probability values- converted to log space in permute_source_lengths!
+                                function get_length_params(source_length::Int64, length_limits::UnitRange{Int64}, permute_range::UnitRange{Int64})
+                                    extendable = length_limits[end]-source_length
+                                    contractable =  source_length-length_limits[1]
+
+                                    if extendable == 0 && contractable > 0
+                                        permute_sign=-1
+                                    elseif contractable == 0 && extendable > 0
+                                        permute_sign=1
+                                    else
+                                        permute_sign = rand(-1:2:1)
+                                    end
+
+                                    permute_sign==1 && extendable<permute_range[end] && (permute_range=permute_range[1]:extendable)
+                                    permute_sign==-1 && contractable<permute_range[end] && (permute_range=permute_range[1]:contractable)
+                                    permute_length = rand(permute_range)
+
+                                    return permute_sign, permute_length
+                                end
+
+function permute_mix!(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=10, mix_move_range::UnitRange=Int(ceil(.001*length(m.mix_matrix))):Int(ceil(.1*length(m.mix_matrix)))) 
     m.log_Li = -Inf; iterate = 1 #init for iterative likelihood search
     T,O = size(observations); T=T-1
     S = length(m.sources)
