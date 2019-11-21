@@ -24,7 +24,8 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     stepworker::Int64
     workers::Vector{Int64}
     wk_totals::Vector{Int64}
-    wk_li_delta::Vector{Float64}
+    total_li_delta::Vector{Float64}
+    wk_li_delta::Matrix{Float64}
     wk_instruction::Vector{Int64}
     model_exhaust::Vector{Int64}
     wk_eff::Vector{Vector{Float64}}
@@ -66,6 +67,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          workers,
          zeros(Int64,length(workers)),
          zeros(length(workers)),
+         zeros(length(workers), eff_iterates),
          zeros(Int64,length(workers)),
          zeros(Int64,length(workers)),
          [[0.] for i in 1:length(workers)],
@@ -97,8 +99,10 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     widx=findfirst(isequal(worker), p.workers)
     p.wk_totals[widx]+=1
     li_delta=new_li-old_li
+    p.total_li_delta[widx]+=new_li-old_li
 
-    p.wk_li_delta[widx]+=new_li-old_li
+    p.wk_li_delta[widx,1:end-1]=p.wk_li_delta[widx,2:end]
+    p.wk_li_delta[widx,end]=li_delta
 
     push!(p.wk_eff[widx],li_delta/wk_time)
     length(p.wk_eff[widx])>p.eff_iterates && (p.wk_eff[widx]=p.wk_eff[widx][end-p.eff_iterates+1:end]) #keep worker efficiency array under iterate size limit
@@ -131,7 +135,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
             dur = ProgressMeter.durationstring(t-p.tfirst)
             msg = @sprintf "%s Converged. Time: %s (%d iterations). H: %s" p.desc dur p.counter p.information
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            hist=UnicodePlots.histogram(p.li_dist)
+            hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
             #p.numprintedvalues=nrows(hist.graphics)
             ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             show(p.output, hist)
@@ -148,18 +152,25 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         elapsed_time = t - p.tfirst
+
         wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
+
+        lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta, colormap=:plasma, title="Worker lhΔ history")
         
         msg1 = @sprintf "%s Step %i::Wk:%g: S|Mi|Me|I:%s|%s|%s|%s T μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
         msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
         hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
-        p.numprintedvalues=nrows(hist.graphics)+nrows(wk_inst.graphics)+11
 
+        #p.numprintedvalues=nrows(wk_inst.graphics)+nrows(hist.graphics)+nrows(lh_heatmap.graphics)+1
+        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+15
+        print(p.output, string(p.numprintedvalues))
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         show(p.output, wk_inst)
+        print(p.output, "\n")
+        show(p.output, lh_heatmap)
         print(p.output, "\n")
         ProgressMeter.printover(p.output, msg1, :magenta)
         print(p.output, "\n")

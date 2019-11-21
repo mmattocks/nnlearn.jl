@@ -45,6 +45,9 @@ const permute_params = [
         ("init",(no_sources))
     ], #worker 3
     [
+        ("source",(no_sources, .2, .3)),
+        ("source",(no_sources, .8, 1.)),
+        ("mix",(no_sources)),
         ("merge",(no_sources)),
         ("init",(no_sources))
     ], #worker 7
@@ -56,7 +59,7 @@ const permute_params = [
         ("init",(no_sources))
     ] #worker 8
 ]
-worker_instruction_rand=[false,false,false,true]
+worker_instruction_rand=[false,false,true,true]
 
 const prior_wt=3.0
 

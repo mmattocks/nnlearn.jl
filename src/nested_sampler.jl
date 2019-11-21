@@ -98,7 +98,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
     log_frac=log(evidence_fraction)
     
     iterate = length(e.log_Li) #get the iterate from the enemble 
-    meter = ProgressNS(e.naive_lh, typemax(Float64), [1], "Nested Sampling:: ", 0, iterate)
+    meter = ProgressNS(e.naive_lh, typemax(Float64), [1], "Nested Sampling::", 0, iterate)
 
     while CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= CLHMM.lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the enemble 
