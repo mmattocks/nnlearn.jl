@@ -67,7 +67,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          workers,
          zeros(Int64,length(workers)),
          zeros(length(workers)),
-         zeros(length(workers), eff_iterates),
+         zeros(length(workers), 65),
          zeros(Int64,length(workers)),
          zeros(Int64,length(workers)),
          [[0.] for i in 1:length(workers)],
@@ -79,10 +79,10 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
 end
 
 ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1, desc::AbstractString="Nested Sampling::",
-         color::Symbol=:green, output::IO=stderr, offset::Integer=0, start_it::Integer=1, eff_iterates=50) = 
+         color::Symbol=:green, output::IO=stderr, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = 
             ProgressNS{typeof(interval)}(naive, interval, workers, dt=dt, eff_iterates=eff_iterates, desc=desc, color=color, output=output, offset=offset, start_it=start_it)
 
-ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1, eff_iterates=50) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates)
+ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates)
 
 function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction; options...)
     
@@ -135,7 +135,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
             dur = ProgressMeter.durationstring(t-p.tfirst)
             msg = @sprintf "%s Converged. Time: %s (%d iterations). H: %s" p.desc dur p.counter p.information
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
-            hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
+            hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution", color=:green)
             #p.numprintedvalues=nrows(hist.graphics)
             ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
             show(p.output, hist)
@@ -156,15 +156,15 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
         wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
 
-        lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta, colormap=:plasma, title="Worker lhΔ history")
+        lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")
         
         msg1 = @sprintf "%s Step %i::Wk:%g: S|Mi|Me|I:%s|%s|%s|%s T μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
         msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
-        hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution")
+        hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution", color=:green)
 
         #p.numprintedvalues=nrows(wk_inst.graphics)+nrows(hist.graphics)+nrows(lh_heatmap.graphics)+1
-        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+15
+        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+16
         print(p.output, string(p.numprintedvalues))
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
