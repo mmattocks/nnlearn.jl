@@ -33,6 +33,9 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     SMiMeI::Vector{Int64}
     mean_stp_time::Float64
     eff_iterates::Int64
+    no_displayed_srcs::Int64
+    sources::Vector{Tuple{Matrix{Float64},Int64}}
+    mix::BitMatrix  
 
     function ProgressNS{T}(    naive::Float64,
                                interval::T,
@@ -43,7 +46,8 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
                                color::Symbol=:green,
                                output::IO=stderr,
                                offset::Int=0,
-                               start_it::Int=1) where T
+                               start_it::Int=1,
+                               no_displayed_srcs::Int64=0) where T
         tfirst = tlast = time()
         printed = false
         new{T}(interval,
@@ -74,7 +78,10 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          ["none" for worker in 1:length(workers)],
          zeros(Int64,4),
          0.,
-         eff_iterates)
+         eff_iterates,
+         no_displayed_srcs,
+         [zeros(0,0)],
+         falses(0,0))
     end
 end
 
@@ -84,7 +91,7 @@ ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1,
 
 ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates)
 
-function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction; options...)
+function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction, sources, bitmatrix; options...)
     
     instruction == "source" && (p.SMiMeI[1]+=1)
     instruction == "mix" && (p.SMiMeI[2]+=1)
@@ -122,6 +129,8 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     p.information = info
     p.li_dist=li_dist
     p.stepworker = worker
+    p.source=sources
+    p.bitmatrix=bitmatrix
     updateProgress!(p; options...)
 end
 
@@ -164,14 +173,15 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
         hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution", color=:green)
 
         #p.numprintedvalues=nrows(wk_inst.graphics)+nrows(hist.graphics)+nrows(lh_heatmap.graphics)+1
-        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+16
-        print(p.output, string(p.numprintedvalues))
+        srclines=p.no_displayed_srcs+1
+        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+16+srclines
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         show(p.output, wk_inst)
         print(p.output, "\n")
         show(p.output, lh_heatmap)
         print(p.output, "\n")
+        p.no_displayed_srcs>0 && printsources(p)
         ProgressMeter.printover(p.output, msg1, :magenta)
         print(p.output, "\n")
         ProgressMeter.printover(p.output, msg2, p.color)
@@ -195,4 +205,36 @@ end
                     (m,r) = divrem(r, 60)
                     (isnan(h)||isnan(m)||isnan(r)) && return "NaN"
                     string(Int(h),":",Int(m),":",Int(ceil(r)))
+                end
+
+                function printsources(p; freqsort=true)
+                    printidxs=Vector{Int64}()
+                    printsrcs=Vector{Matrix{Float64}}()
+                    printfreqs=Vector{Float64}()
+
+                    if freqsort
+                        freqs=vec(sum(p.mix,dims=1)); total=size(p.mix,1)
+                        sortfreqs=sort(freqs,rev=true)
+                        for srcidx in 1:p.no_displayed_srcs
+                            unsort_idx=findfirst(isequal(sortfreqs[srcidx]))
+                            push!(printidxs, unsort_idx)
+                            push!(printsrcs, p.sources[unsort_idx][1])
+                            push!(printfreqs, sortfreqs[srcidx]/total)
+                        end
+                    else
+                        freqs=vec(sum(p.mix,dims=1)); total=size(p.mix,1)
+                        for srcidx in 1:p.no_displayed_srcs
+                            push!(printidxs, srcidx)
+                            push!(printsrcs, p.sources[srcidx][1])
+                            push!(printfreqs, sortfreqs[srcidx]/total)
+                        end
+                    end
+
+                    print(p.output, "MLE Top Sources\n")
+
+                    for src in 1:p.no_displayed_srcs
+                        print(p.output, "S$(printidxs[src]), $(printfreqs[src])%: ")
+                        pwmstr_to_io(p.output, printsrcs[src])
+                        print(p.output, "\n")
+                    end
                 end

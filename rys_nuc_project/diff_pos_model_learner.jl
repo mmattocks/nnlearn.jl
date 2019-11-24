@@ -23,10 +23,10 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 3000
+const ensemble_size = 1000
 const no_sources = 40
 const source_min_bases = 3
-const source_max_bases = Int(ceil(position_size/2))
+const source_max_bases = Int(floor(position_size/2))
 @assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .07
@@ -36,20 +36,16 @@ const permute_params = [
     [
         ("source",(no_sources, .2, .3)),
         ("source",(no_sources, .8, 1.)),
-        ("merge",(no_sources)),
         ("init",(no_sources))
     ], #worker 2
     [
         ("mix",(no_sources)),
-        ("merge",(no_sources)),
         ("init",(no_sources))
     ], #worker 3
     [
-        ("source",(no_sources, .2, .3)),
-        ("source",(no_sources, .8, 1.)),
-        ("mix",(no_sources)),
         ("merge",(no_sources)),
-        ("init",(no_sources))
+        ("merge",(no_sources)),
+        ("init",(1))
     ], #worker 7
     [
         ("source",(no_sources, .2, .3)),

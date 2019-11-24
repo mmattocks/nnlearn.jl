@@ -13,6 +13,12 @@ colour_dict = Dict{Char,String}('A'=>"(0,128,0)", #green
                  'G'=>"(255,69,0)", #yellow-brown
                  'T'=>"(150,0,0)")  #red
 
+#char output params for string display of PWMs in nested sampler instrumentation
+lwcs_vec=['a','c','g','t']
+upcs_vec=['A','C','G','T']
+cs_vec=[:green,:blue,:yellow,:red]
+thresh_dict=Dict([(0.,'_'),(.5,'.'),(1.,"lwcs"),(1.5,"upcs")])
+
 source_left_x = 10
 xlen = 20
 yscale = 250
@@ -64,12 +70,45 @@ end
 
 function pwm_to_logo(source,xpos,ypos,xlen,yscale)
     outstr = ""
-    for n in 1:size(source)[1]
+    for n in 1:size(source,1)
         outstr *= print_weightvec_at_x_y(source[n,:],xpos+xlen*n,ypos,xlen,yscale)
     end
     outstr *= "\n"
     return outstr
 end
+
+function pwmstr_to_io(io,source;log=true)
+    log && (source=exp.(source))
+    for pos in 1:size(source,1)
+        char,color=uni_wvec_params(source[pos,:])
+        printstyled(io, char; color=color)
+    end
+end
+
+function uni_wvec_params(wvec) #assign a single unicode char and color symbol for the most informational position in a position weight vector
+    !HMMBase.isprobvec(wvec) && throw()
+    wvec.+=10^-99
+    wvec = [x/sum(wvec) for x in wvec]
+    infscore=(2.0 + sum([x*log(2,x) for x in wvec]))
+    infvec = [x*infscore for x in wvec]
+    val,idx=findmax(infvec)
+    return char,color=get_char_by_thresh(idx,val)
+end
+                function get_char_by_thresh(idx,val)
+                    char = '?'; seen_thresh=0.
+                    for (thresh,threshchar) in thresh_dict
+                        val >= thresh && thresh >= seen_thresh && (char=threshchar; seen_thresh=thresh)
+                    end
+                    char=='?' && println(val)
+                    char=="lwcs" && (char=lwcs_vec[idx])
+                    char=="upcs" && (char=upcs_vec[idx])
+                    color=cs_vec[idx]
+
+                    return char,color
+                end
+
+
+
 
 
 function print_weightvec_at_x_y(wvec, xpos, ypos, xlen, yscale)
@@ -78,9 +117,8 @@ function print_weightvec_at_x_y(wvec, xpos, ypos, xlen, yscale)
     # maximum height available for a "perfect" nucleotide
     outstr = ""
     basestr = "ACGT"
-    #prevent log(0) = -Inf
-    wvec = [x+0.00000001 for x in wvec]
-    wvec = [x/sum(wvec) for x in wvec]
+    wvec.+=10^-99  #prevent log(0) = -Inf
+    wvec = [x/sum(wvec) for x in wvec] #renorm
     infscore = (2.0 + sum([x*log(2,x) for x in wvec]))
     if infscore==0.0
         return ""
