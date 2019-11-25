@@ -40,20 +40,16 @@ const mixing_prior = .01
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 3
 const permute_params = [
-        ("source",(no_sources*10, .2, .3)),
-        ("source",(no_sources*10, .2, .3)),
-        ("source",(no_sources*10, .8, 1.)),
-        ("mix",(no_sources*10)),
-        ("mix",(no_sources*10)),
-        ("mix",(no_sources*10)),
-        ("merge",(no_sources*10)),
-        ("merge",(no_sources*10)),
-        ("init",(no_sources*10)),
-        ("init",(no_sources*10))
+        ("PSFM",(no_sources, .2, .3)),
+        ("PSFM",(no_sources, .8, 1.)),
+        ("FM",()),
+        ("merge",(no_sources)),
+        ("random",(no_sources)),
+        ("reinit",(no_sources))
     ]
 worker_instruction_rand=true
 
-const prior_wt=40.0
+const prior_wt=10.0
 
 #FUNCTIONS
 function setup_obs(hmm, no_obs, obsl)

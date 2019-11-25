@@ -30,8 +30,9 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 				new_m=reinit_src(m, contour,  e.obs_array, e.obs_lengths, e.bg_scores, e.source_priors, e.mix_prior, params...)
 			else
 				@error "Malformed permute mode code! Current supported: \"PSFM\", \"FM\", \"merge\", \"random\", \"reinit\""
-			end
-			m.log_Li > contour && return new_m, (time()-start, job, i, m.log_Li, new_m.log_Li, mode)
+            end
+            println(m.log_Li)
+			new_m.log_Li > contour && return new_m, (time()-start, job, i, m.log_Li, new_m.log_Li, mode)
 		end
 	end
 	return nothing, nothing
@@ -80,19 +81,19 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 end
 
 #DECORRELATION SEARCH PATTERNS
-function perm_src_fit_mix(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, source_priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=length(m.sources), weight_shift_freq::Float64=.1, length_change_freq::Float64=.3, weight_shift_dist::Distributions.ContinuousUnivariateDistribution=Weibull(1.5,.1))
+function perm_src_fit_mix(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=length(m.sources), weight_shift_freq::Float64=.1, length_change_freq::Float64=.3, weight_shift_dist::Distributions.ContinuousUnivariateDistribution=Weibull(1.5,.1))
     new_log_Li=-Inf;  iterate = 1
     T,O = size(observations); T=T-1; S = length(m.sources)
     new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
 
-    while m.log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+    while new_log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix); tm_one=deepcopy(m.mix_matrix);
 
         s = rand(1:S); 
-        new_mix[:,s].=false;tm_one[:,s]=true
+        new_mix[:,s].=false;tm_one[:,s].=true
 
         weight_shift_freq > 0 && (new_sources[s]=permute_source_weights(new_sources[s], weight_shift_freq, weight_shift_dist))
-        rand() < length_change_freq && (new_sources[s]=permute_source_length(new_sources[s], priors, m.source_length_limits))
+        rand() < length_change_freq && (new_sources[s]=permute_source_length(new_sources[s], source_priors[s], m.source_length_limits))
 
         l,zero_cache=IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true)
         l,one_cache=IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, tm_one, true, true)
@@ -103,7 +104,7 @@ function perm_src_fit_mix(m::ICA_PWM_model, contour::Float64, observations::Matr
         clean=Vector{Bool}(trues(O))
         clean[new_mix].=false
 
-        new_log_Li = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, new_mix, true, false, zero_cache, clean)
+        new_log_Li = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, false, zero_cache, clean)
         iterate += 1
     end
 
@@ -131,20 +132,20 @@ function fit_mix(m::ICA_PWM_model, observations::Matrix{Int64}, obs_lengths::Vec
     return ICA_PWM_model("candidate",m.sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)
 end
 
-function random_decorrelate(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, priors::Vector{Vector{Dirichlet{Float64}}}, source_priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=length(m.sources), weight_shift_freq::Float64=.1, length_change_freq::Float64=.3, weight_shift_dist::Distributions.ContinuousUnivariateDistribution=Weibull(1.5,.1), mix_move_range::UnitRange=1:size(m.mix_matrix,1))
+function random_decorrelate(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64=length(m.sources), weight_shift_freq::Float64=.1, length_change_freq::Float64=.3, weight_shift_dist::Distributions.ContinuousUnivariateDistribution=Weibull(1.5,.1), mix_move_range::UnitRange=1:size(m.mix_matrix,1))
     new_log_Li=-Inf;  iterate = 1
     T,O = size(observations); T=T-1; S = length(m.sources)
     new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
 
-    a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
+    a, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true)
     clean=Vector{Bool}(trues(O))
 
-    while m.log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+    while new_log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         s = rand(1:length(m.sources))
         weight_shift_freq > 0 && (new_sources[s]=permute_source_weights(new_sources[s], weight_shift_freq, weight_shift_dist))
-        rand() < length_change_freq && (new_sources[s]=permute_source_length(new_sources[s], priors, m.source_length_limits))
+        rand() < length_change_freq && (new_sources[s]=permute_source_length(new_sources[s], source_priors, m.source_length_limits))
         new_mix[:,s]=mixvec_decorrelate(new_mix[:,s],rand(mix_move_range))
-        m.log_Li, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true, cache, clean)
+        new_log_Li, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true, cache, clean)
         iterate += 1
     end
 
@@ -158,7 +159,7 @@ function distance_merge(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, 
     T,O = size(observations); T=T-1; S = length(m.sources)
     new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
 
-    a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
+    a, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true)
     clean=Vector{Bool}(trues(O))
 
     while new_log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
@@ -256,7 +257,7 @@ function consolidate_check(sources; thresh=.035)
     for (s1,src1) in enumerate(sources)
         s1_idxs=Vector{Int64}()
         for (s2,src2) in enumerate(sources)
-            s1=s2 && break
+            s1==s2 && break
             pwm1=src1[1]; pwm2=src2[1]
             -3<=(size(pwm1,1)-size(pwm2,1))<=3 && pwm_distance(pwm1,pwm2)<thresh && push!(s1_idxs,s2) && (pass=false)
         end
@@ -267,7 +268,7 @@ end
 
                 function pwm_distance(pwm1,pwm2)
                     minwml=min(size(pwm1,1),size(pwm2,1))
-                    return sum([Distances.euclidean(exp.(pwm1[pos,:]), exp.(pwm2[pos,:])) for pos in 1:minwml])/minwml
+                    return sum([euclidean(exp.(pwm1[pos,:]), exp.(pwm2[pos,:])) for pos in 1:minwml])/minwml
                 end
 
 
@@ -376,7 +377,8 @@ end
 function mixvec_decorrelate(mix::BitVector, moves::Int64)
     new_mix=deepcopy(mix)
     idxs_to_flip=rand(1:length(mix), moves)
-    return new_mix[idxs_to_flip] .= .!mix[idxs_to_flip]
+    new_mix[idxs_to_flip] .= .!mix[idxs_to_flip]
+    return new_mix
 end
 
 function most_dissimilar(mix1, mix2)
