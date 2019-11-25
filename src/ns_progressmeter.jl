@@ -105,7 +105,6 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
 
     widx=findfirst(isequal(worker), p.workers)
     p.wk_totals[widx]+=1
-    println("$new_li    $old_li")
     li_delta=new_li-old_li
     p.total_li_delta[widx]+=new_li-old_li
 
@@ -180,7 +179,6 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
     if t > p.tlast+p.dt && !p.triggered
         wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
-        println(p.wk_eff)
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
 
         lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")

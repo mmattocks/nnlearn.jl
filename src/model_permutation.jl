@@ -31,7 +31,6 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, param_set::Vector{Tuple{
 			else
 				@error "Malformed permute mode code! Current supported: \"PSFM\", \"FM\", \"merge\", \"random\", \"reinit\""
             end
-            println(m.log_Li)
 			new_m.log_Li > contour && return new_m, (time()-start, job, i, m.log_Li, new_m.log_Li, mode)
 		end
 	end
@@ -102,7 +101,7 @@ function perm_src_fit_mix(m::ICA_PWM_model, contour::Float64, observations::Matr
         new_mix[:,s]=fit_mix
 
         clean=Vector{Bool}(trues(O))
-        clean[new_mix].=false
+        clean[fit_mix].=false
 
         new_log_Li = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, false, zero_cache, clean)
         iterate += 1
@@ -143,7 +142,7 @@ function random_decorrelate(m::ICA_PWM_model, contour::Float64, observations::Ma
     while new_log_Li < contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         s = rand(1:length(m.sources))
         weight_shift_freq > 0 && (new_sources[s]=permute_source_weights(new_sources[s], weight_shift_freq, weight_shift_dist))
-        rand() < length_change_freq && (new_sources[s]=permute_source_length(new_sources[s], source_priors, m.source_length_limits))
+        rand() < length_change_freq && (new_sources[s]=permute_source_length(new_sources[s], source_priors[s], m.source_length_limits))
         new_mix[:,s]=mixvec_decorrelate(new_mix[:,s],rand(mix_move_range))
         new_log_Li, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true, cache, clean)
         iterate += 1
@@ -166,7 +165,7 @@ function distance_merge(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, 
         merger_m = deserialize(rand(models).path) #randomly select a model to merge
         s = rand(1:S) #randomly select a source to merge
         s > m.informed_sources ? #if the source is on an uninformative prior, the merger model source will be selected by mixvector similarity
-            merge_s=most_dissimilar(new_mix,merger_m.mix) : merge_s=s
+            merge_s=most_dissimilar(new_mix,merger_m.mix_matrix) : merge_s=s
         
         clean[new_mix[:,s]].=false #mark dirty any obs that start with the source
         new_sources[s] = merger_m.sources[merge_s] #copy the source
@@ -224,7 +223,7 @@ function reinit_src(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int
 
         s_to_reinit<=m.informed_sources ? (new_mix[:,s_to_reinit] = mix_prior[1][:,s_to_reinit]) : #if the source has an informative prior, assign that
             new_mix[:,s_to_reinit] = init_mix_matrix((falses(0,0),mix_prior[2]),O,1) #otherwise initialize the source's mix vector from the uninformative prior
-        clean[m.new_mix[:,s_to_reinit]].=false #mark dirty any obs that have the source after the reinitialization
+        clean[new_mix[:,s_to_reinit]].=false #mark dirty any obs that have the source after the reinitialization
 
         new_log_Li, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true, cache, clean) #assess likelihood
         iterate += 1
@@ -259,7 +258,12 @@ function consolidate_check(sources; thresh=.035)
         for (s2,src2) in enumerate(sources)
             s1==s2 && break
             pwm1=src1[1]; pwm2=src2[1]
-            -3<=(size(pwm1,1)-size(pwm2,1))<=3 && pwm_distance(pwm1,pwm2)<thresh && push!(s1_idxs,s2) && (pass=false)
+            if -3<=(size(pwm1,1)-size(pwm2,1))<=3 
+                if pwm_distance(pwm1,pwm2)<thresh
+                    push!(s1_idxs,s2)
+                    pass=false
+                end
+            end
         end
         push!(con_idxs,s1_idxs)
     end
@@ -382,11 +386,11 @@ function mixvec_decorrelate(mix::BitVector, moves::Int64)
 end
 
 function most_dissimilar(mix1, mix2)
-    S1=length(mix1);S2=length(mix2)
+    S1=size(mix1,2);S2=size(mix2,2)
     dist_mat=zeros(S1,S2)
     for s1 in 1:S1, s2 in 1:S2
         sum(mix1[:,s1].==mix2[:,s2])
     end
-    scores=sum(dist_mat,1)
+    scores=sum(dist_mat,dims=1)
     return findmin(scores)[2]
 end
