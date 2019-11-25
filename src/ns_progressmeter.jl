@@ -80,7 +80,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          0.,
          eff_iterates,
          no_displayed_srcs,
-         [zeros(0,0)],
+         [(zeros(0,0),0)],
          falses(0,0))
     end
 end
@@ -89,9 +89,9 @@ ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1,
          color::Symbol=:green, output::IO=stderr, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = 
             ProgressNS{typeof(interval)}(naive, interval, workers, dt=dt, eff_iterates=eff_iterates, desc=desc, color=color, output=output, offset=offset, start_it=start_it)
 
-ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates)
+ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1; eff_iterates=250, no_displayed_srcs=1) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates, no_displayed_srcs=no_displayed_srcs)
 
-function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction, sources, bitmatrix; options...)
+function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction; sources=[(zeros(0,0),0)], bitmatrix=falses(0,0), options...)
     
     instruction == "source" && (p.SMiMeI[1]+=1)
     instruction == "mix" && (p.SMiMeI[2]+=1)
@@ -129,8 +129,8 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     p.information = info
     p.li_dist=li_dist
     p.stepworker = worker
-    p.source=sources
-    p.bitmatrix=bitmatrix
+    p.sources=sources
+    p.mix=bitmatrix
     updateProgress!(p; options...)
 end
 
@@ -141,14 +141,32 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
         p.triggered = true
         if p.printed
             p.triggered = true
+            wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
+            wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
+    
+            lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")
+
             dur = ProgressMeter.durationstring(t-p.tfirst)
-            msg = @sprintf "%s Converged. Time: %s (%d iterations). H: %s" p.desc dur p.counter p.information
+            msg1 = @sprintf "%s Converged. Time: %s (%d iterations). H: %s" p.desc dur p.counter p.information
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
+            msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
             hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution", color=:green)
             #p.numprintedvalues=nrows(hist.graphics)
+            srclines=p.no_displayed_srcs+1
+            p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+16+srclines
+            print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
+            show(p.output, wk_inst)
+            print(p.output, "\n")
+            show(p.output, lh_heatmap)
+            print(p.output, "\n")
+            p.no_displayed_srcs>0 && printsources(p)
+            ProgressMeter.printover(p.output, msg1, :magenta)
+            print(p.output, "\n")
+            ProgressMeter.printover(p.output, msg2, p.color)
+            print(p.output, "\n")
             show(p.output, hist)
-            ProgressMeter.printover(p.output, msg, p.color)
+            print(p.output, "\n")
 
             if keep
                 println(p.output)
@@ -160,8 +178,6 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
     end
 
     if t > p.tlast+p.dt && !p.triggered
-        elapsed_time = t - p.tfirst
-
         wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
 
@@ -215,10 +231,10 @@ end
                     if freqsort
                         freqs=vec(sum(p.mix,dims=1)); total=size(p.mix,1)
                         sortfreqs=sort(freqs,rev=true)
+                        sortidxs=sortperm(freqs)
                         for srcidx in 1:p.no_displayed_srcs
-                            unsort_idx=findfirst(isequal(sortfreqs[srcidx]))
-                            push!(printidxs, unsort_idx)
-                            push!(printsrcs, p.sources[unsort_idx][1])
+                            push!(printidxs, sortidxs[srcidx])
+                            push!(printsrcs, p.sources[sortidxs[srcidx]][1])
                             push!(printfreqs, sortfreqs[srcidx]/total)
                         end
                     else
@@ -226,11 +242,11 @@ end
                         for srcidx in 1:p.no_displayed_srcs
                             push!(printidxs, srcidx)
                             push!(printsrcs, p.sources[srcidx][1])
-                            push!(printfreqs, sortfreqs[srcidx]/total)
+                            push!(printfreqs, freqs[srcidx]/total)
                         end
                     end
 
-                    print(p.output, "MLE Top Sources\n")
+                    printstyled(p.output, "MLE Top Sources\n", bold=true)
 
                     for src in 1:p.no_displayed_srcs
                         print(p.output, "S$(printidxs[src]), $(printfreqs[src])%: ")

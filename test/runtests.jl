@@ -265,16 +265,34 @@ end
     source_priors = nnlearn.assemble_source_priors(4, [source_pwm, source_pwm_2], 4.0, src_length_limits)
     mix_prior=.5
 
-    bg_scores = log.(fill(.5, (12,9)))
-    obs=[BioSequences.DNASequence("CCGTTGACGATGTGATGAATAAAG")
-    BioSequences.DNASequence("CCCCGATGATGACCGTTGACGATG")
-    BioSequences.DNASequence("CCCCGATGATGACCCCGATTTTGA")
-    BioSequences.DNASequence("TCATCATGCTGATGATGAATAAAG")
-    BioSequences.DNASequence("TGATGAATCTGACCCCGATTTTGA")
-    BioSequences.DNASequence("CCCCGATTTTGATGATGAATAAAG")
-    BioSequences.DNASequence("TCATGGGCTGAACCGTTGACGATG")
-    BioSequences.DNASequence("TCATCCTGCTGACCCCGATTTTGA")
-    BioSequences.DNASequence("TGATGAATAAAGTCATCCTGCTGA")
+    bg_scores = log.(fill(.1, (30,27)))
+    obs=[BioSequences.DNASequence("CCGTTGACGATGTGATGAATAATGAAAGAA")
+    BioSequences.DNASequence("CCCCGATGATGACCGTTGACCAGATGGATG")
+    BioSequences.DNASequence("CCCCGATGATGACCCCGATTTTGAAAAAAA")
+    BioSequences.DNASequence("TCATCATGCTGATGATGAATCAGATGAAAG")
+    BioSequences.DNASequence("TGATGAATCTGACCCAGATGCCGATTTTGA")
+    BioSequences.DNASequence("CCCCGATTTTGATCAGGATGAATAAAGAAA")
+    BioSequences.DNASequence("TCATGGGCTGATGAACCGTTGACGATGAAA")
+    BioSequences.DNASequence("TCATCCTGCTGACCCCGATTTCAGTGAAAA")
+    BioSequences.DNASequence("TGATGAATAAAGTCATCCTGCATGTGAAAA")
+    BioSequences.DNASequence("CCGTTGACGATGTGATGAATGATAAAGAAA")
+    BioSequences.DNASequence("CCCCGATGATGACCGATGTTGACGATGAAA")
+    BioSequences.DNASequence("CCCCGATGATGAATGCCCCGATTTTGAAAA")
+    BioSequences.DNASequence("TCATCATGCTGATGATGAATAAAGAAAAAA")
+    BioSequences.DNASequence("TGATGAATCTGACCCCGATCAGTTTGAAAA")
+    BioSequences.DNASequence("CCCCGATTTTGATCAGATGGATGAATAAAG")
+    BioSequences.DNASequence("TCATGGGCTGAACCGTTGACAGCGATGAAA")
+    BioSequences.DNASequence("TCATCCTGCTCAGGACCCCGATTTTATGGA")
+    BioSequences.DNASequence("TGATGAATCAGAAAGTCATCCTGCATGTGA")
+    BioSequences.DNASequence("CCGTTGACCAGGATGTGATGAATAAAGAAA")
+    BioSequences.DNASequence("CCCCGATGATGCAGACCGTTGACGATGAAA")
+    BioSequences.DNASequence("CCCCGATGACAGTGACCCAGCCGATTTTGA")
+    BioSequences.DNASequence("TCATCATGCTGAATGTGATGAATAAAAAAA")
+    BioSequences.DNASequence("TGATGATGAATCTGAATGCCCCGATTTTGA")
+    BioSequences.DNASequence("CCCCGATATGTTTGATGACAGTGAATAAAG")
+    BioSequences.DNASequence("TCATGATGGGCTGAACCGTTGACGATGAAA")
+    BioSequences.DNASequence("TCACAGTCCTGCTGACCCCGATTATGTTGA")
+    BioSequences.DNASequence("TGATGATGAATAAAGTCATGATCCTGCTGA")
     ]
     
     order_seqs = BGHMM.get_order_n_seqs(obs, 0)
@@ -289,12 +307,12 @@ end
 
     @test length(ensemble.models) == 200
     for model in ensemble.models
-        @test -175 < model.log_Li < -25
+        @test -1950 < model.log_Li < -1200
     end
 
     @test length(sp_ensemble.models) == 200
     for model in sp_ensemble.models
-        @test -175 < model.log_Li < -25
+        @test -1950 < model.log_Li < -1200
     end
 
     assembler=addprocs(1)
@@ -306,7 +324,7 @@ end
 
     @test length(dist_ensemble.models) == 200
     for model in ensemble.models
-        @test -1750 < model.log_Li < -25
+        @test -1950 < model.log_Li < -1200
     end
 
     rmprocs(assembler)
@@ -316,7 +334,7 @@ end
     param_set = [("source",(10,.25,.5)),("mix",(10)),("merge",(10)),("init",(10))]
 
     @info "Testing threaded convergence..."
-    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 1., wkrand=true)
+    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, .1, wkrand=true, model_display=4)
 
     @test length(sp_ensemble.models) == 200
     @test length(sp_ensemble.log_Li) == length(sp_ensemble.log_Xi) == length(sp_ensemble.log_wi) == length(sp_ensemble.log_Liwi) == length(sp_ensemble.log_Zi) == length(sp_ensemble.Hi) == sp_ensemble.model_counter-200
@@ -326,7 +344,7 @@ end
     for i in 1:length(sp_ensemble.log_Zi)-1
         @test sp_ensemble.log_Zi[i] <= sp_ensemble.log_Zi[i+1]
     end
-    @test sp_logZ > -140.0
+    @test sp_logZ > -1400.0
 
 
     @info "Testing multiprocess convergence..."
@@ -337,7 +355,7 @@ end
     @everywhere Random.seed!(1)
     
     ####CONVERGE############
-    final_logZ = nnlearn.ns_converge!(ensemble, [param_set, param_set], permute_limit, librarians, worker_pool, 10., backup=(true,250), wkrand=[false,true])
+    final_logZ = nnlearn.ns_converge!(ensemble, [param_set, param_set], permute_limit, librarians, worker_pool, .1, backup=(true,250), wkrand=[false,true], model_display=4)
 
     rmprocs(worker_pool)
     rmprocs(librarians)
@@ -351,7 +369,7 @@ end
         @test ensemble.log_Zi[i] <= ensemble.log_Zi[i+1]
     end
     @test typeof(final_logZ) == Float64
-    @test sp_logZ > -140.0
+    @test sp_logZ > -1400.0
 
     @info "Tests complete!"
 

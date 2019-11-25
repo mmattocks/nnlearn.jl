@@ -225,7 +225,6 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 			end
 			found==true && break;
 			i==permute_limit && (put!(models_chan,nothing);persist=false)#worker to put nothing on channel if it fails to find a model more likely than contour
-			sum()
 		end
 	end
 end

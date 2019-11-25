@@ -93,12 +93,12 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
     return 0, wk, step_report
 end
 
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001; backup::Tuple{Bool,Int64}=(false,0), wkrand=false, verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001; model_display=1, backup::Tuple{Bool,Int64}=(false,0), wkrand=false, verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
     
     iterate = length(e.log_Li) #get the iterate from the enemble 
-    meter = ProgressNS(e.naive_lh, typemax(Float64), [1], "Nested Sampling::", 0, iterate)
+    meter = ProgressNS(e.naive_lh, typemax(Float64), [1], "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
 
     while CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= CLHMM.lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the enemble 
@@ -109,9 +109,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.path,'/',"ens"), e) #every backup interval, serialise the ensemble
 
-        Li_vec=[model.log_Li for model in e.models]
-
-        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, 1, step_report...)
+        e_update_progress(e,meter,log_frac,1,step_report,model_display)        
     end
 
     final_logZ = logsumexp([model.log_Li for model in e.models]) +  e.log_Xi[length(e.log_Li)] - log(1/length(e.models))
@@ -122,7 +120,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 end
 
     
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; backup::Tuple{Bool,Int64}=(false,0), wkrand::Vector{Bool}=Vector{Bool}(falses(length(worker_pool))), verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), wkrand::Vector{Bool}=Vector{Bool}(falses(length(worker_pool))), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
 
@@ -140,7 +138,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
     end
 
     iterate = length(e.log_Li) #get the iterate from the ensemble 
-    meter = ProgressNS(e.naive_lh, typemax(Float64), worker_pool, "Nested Sampling::", 0, iterate)
+    meter = ProgressNS(e.naive_lh, typemax(Float64), worker_pool, "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
 
     while CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= CLHMM.lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the ensemble 
@@ -153,9 +151,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.path,'/',"ens"), e) #every backup interval, serialise the ensemble
 
-        Li_vec=[model.log_Li for model in e.models]
-
-        update!(meter, e.log_Li[end], findmax(Li_vec)[1], CLHMM.lps(findmax(Li_vec)[1],  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...)
+        e_update_progress(e,meter,log_frac,wk,step_report,model_display)        
     end
 
     take!(job_chan); put!(job_chan, nothing)
@@ -166,3 +162,14 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
     return final_logZ
 end
+
+                function e_update_progress(e,meter,log_frac,wk,step_report,model_display)
+                    Li_vec=[model.log_Li for model in e.models]
+                    if model_display>0
+                        max_Li,max_idx=findmax(Li_vec)
+                        max_model=deserialize(e.models[max_idx].path)
+                        update!(meter, e.log_Li[end], max_Li, CLHMM.lps(max_Li,  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...,sources=max_model.sources,bitmatrix=max_model.mix_matrix)
+                    else
+                        update!(meter, e.log_Li[end], max_Li, CLHMM.lps(max_Li,  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...)
+                    end
+                end
