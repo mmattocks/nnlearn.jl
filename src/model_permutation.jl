@@ -108,8 +108,7 @@ function perm_src_fit_mix(m::ICA_PWM_model, contour::Float64, observations::Matr
     end
 
     cons_check, cons_idxs = consolidate_check(new_sources)
-    cons_check ? return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)
-        : consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits)
+    cons_check ? (return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)) : (return consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits))
 end
 
 function fit_mix(m::ICA_PWM_model, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64})
@@ -151,8 +150,7 @@ function random_decorrelate(m::ICA_PWM_model, contour::Float64, observations::Ma
 
 
     cons_check, cons_idxs = consolidate_check(new_sources)
-    cons_check ? return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)
-        : consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits)
+    cons_check ? (return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)) : (return consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits))
 end
 
 function distance_merge(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64)
@@ -179,8 +177,7 @@ function distance_merge(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, 
     end
 
     cons_check, cons_idxs = consolidate_check(new_sources)
-    cons_check ? return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)
-        : consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits)
+    cons_check ? (return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)) : (return consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits))
 end
 
 function distance_merge(librarian::Int64, models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, iterates::Int64)
@@ -207,8 +204,7 @@ function distance_merge(librarian::Int64, models::Vector{nnlearn.Model_Record}, 
     end
 
     cons_check, cons_idxs = consolidate_check(new_sources)
-    cons_check ? return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)
-        : consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits)
+    cons_check ? (return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)) : (return consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits))
 end
 
 function reinit_src(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::Matrix{Float64}, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, iterates::Int64)
@@ -234,8 +230,7 @@ function reinit_src(m::ICA_PWM_model, contour::Float64, observations::Matrix{Int
     end
 
     cons_check, cons_idxs = consolidate_check(new_sources)
-    cons_check ? return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)
-        : consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits)
+    cons_check ? (return ICA_PWM_model("candidate",new_sources, m.informed_sources, m.source_length_limits, new_mix, new_log_Li)) : (return consolidate_srcs(cons_idxs, new_sources, new_mix, observations, obs_lengths, bg_scores, source_priors, m.informed_sources, m.source_length_limits))
 end
 
 ##ORTHOGONALITY HELPER
@@ -263,9 +258,7 @@ function consolidate_check(sources; thresh=.035)
         for (s2,src2) in enumerate(sources)
             s1=s2 && break
             pwm1=src1[1]; pwm2=src2[1]
-            if -3=<(size(pwm1,1)-size(pwm2,1))<=3
-                pwm_distance(pwm1,pwm2)<thresh&&(pass=false)&&push!(s1_idxs,s2)
-            end
+            -3<=(size(pwm1,1)-size(pwm2,1))<=3 && pwm_distance(pwm1,pwm2)<thresh && push!(s1_idxs,s2) && (pass=false)
         end
         push!(con_idxs,s1_idxs)
     end

@@ -20,7 +20,8 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64; wk
             model_selected=true
             new_model_record = Model_Record(string(e.path,'/',e.model_counter), candidate.log_Li);
             push!(e.models, new_model_record);
-            serialize(new_model_record.path, candidate)
+            final_model=ICA_PWM_model(string(e.model_counter), candidate.sources, candidate.informed_sources, candidate.source_length_limits, candidate.mix_matrix, candidate.log_Li)
+            serialize(new_model_record.path, final_model)
             e.model_counter +=1
         else
             push!(e.models, Li_model)
@@ -67,7 +68,8 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
                 model_selected=true
                 new_model_record = Model_Record(string(e.path,'/',e.model_counter), candidate.log_Li);
                 push!(e.models, new_model_record);
-                serialize(new_model_record.path, candidate)
+                final_model=ICA_PWM_model(string(e.model_counter), candidate.sources, candidate.informed_sources, candidate.source_length_limits, candidate.mix_matrix, candidate.log_Li)
+                serialize(new_model_record.path, final_model)
                 e.model_counter +=1
             end
         else
