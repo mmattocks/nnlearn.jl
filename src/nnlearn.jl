@@ -10,6 +10,7 @@ module nnlearn
     import Printf: @sprintf
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
     import Random: rand, seed!, shuffle!
+    import Distances: euclidean
 
     mutable struct Model_Record #record struct to associate a log_Li with a saved, calculated model
         path::String
@@ -75,5 +76,6 @@ module nnlearn
     include("model_display.jl")
     include("ns_progressmeter.jl")
     include("ensemble_utils.jl")
+    include("model_permutation.jl")
     #include("performance.jl")
 end # module
