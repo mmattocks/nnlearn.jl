@@ -239,11 +239,9 @@ function consolidate_srcs(con_idxs, sources, mix, observations, obs_lengths, bg_
     for (s,convec) in enumerate(con_idxs)
         if length(convec)>0
             for cons in convec
-                new_mix[mix[:,cons],s].=true
                 new_sources[cons]=init_logPWM_sources([source_priors[cons]], source_length_limits)[1]
-                new_mix[:,cons].=false
             end
-            break #dont do this for more than one convec
+            break #dont do this for more than one consolidation at a time
         end
     end
 
@@ -256,12 +254,13 @@ function consolidate_check(sources; thresh=.035)
     for (s1,src1) in enumerate(sources)
         s1_idxs=Vector{Int64}()
         for (s2,src2) in enumerate(sources)
-            s1==s2 && break
-            pwm1=src1[1]; pwm2=src2[1]
-            if -3<=(size(pwm1,1)-size(pwm2,1))<=3 
-                if pwm_distance(pwm1,pwm2)<thresh
-                    push!(s1_idxs,s2)
-                    pass=false
+            if !(s1==s2)
+                pwm1=src1[1]; pwm2=src2[1]
+                if -3<=(size(pwm1,1)-size(pwm2,1))<=3 
+                    if pwm_distance(pwm1,pwm2)<thresh
+                        push!(s1_idxs,s2)
+                        pass=false
+                    end
                 end
             end
         end

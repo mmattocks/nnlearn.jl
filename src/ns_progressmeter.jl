@@ -30,7 +30,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     model_exhaust::Vector{Int64}
     wk_eff::Vector{Vector{Float64}}
     wk_jobs::Vector{String}
-    SMiMeI::Vector{Int64}
+    inst_counters::Vector{Int64}
     mean_stp_time::Float64
     eff_iterates::Int64
     no_displayed_srcs::Int64
@@ -76,7 +76,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          zeros(Int64,length(workers)),
          [[0.] for i in 1:length(workers)],
          ["none" for worker in 1:length(workers)],
-         zeros(Int64,4),
+         zeros(Int64,5),
          0.,
          eff_iterates,
          no_displayed_srcs,
@@ -93,10 +93,11 @@ ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::Abstrac
 
 function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction; sources=[(zeros(0,0),0)], bitmatrix=falses(0,0), options...)
     
-    instruction == "source" && (p.SMiMeI[1]+=1)
-    instruction == "mix" && (p.SMiMeI[2]+=1)
-    instruction == "merge" && (p.SMiMeI[3]+=1)
-    instruction == "init" && (p.SMiMeI[4]+=1)
+    instruction == "PSFM" && (p.inst_counters[1]+=1)
+    instruction == "FM" && (p.inst_counters[2]+=1)
+    instruction == "merge" && (p.inst_counters[3]+=1)
+    instruction == "random" && (p.inst_counters[4]+=1)
+    instruction == "reinit" && (p.inst_counters[5]+=1)
 
     p.counter += 1
     stps_elapsed=p.counter-p.start_it
@@ -183,7 +184,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
         lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")
         
-        msg1 = @sprintf "%s Step %i::Wk:%g: S|Mi|Me|I:%s|%s|%s|%s T μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.SMiMeI[1] p.SMiMeI[2] p.SMiMeI[3] p.SMiMeI[4] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
+        msg1 = @sprintf "%s Step %i::Wk:%g: P|F|M|R|I:%s|%s|%s|%s|%s T μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.inst_counters[1] p.inst_counters[2] p.inst_counters[3] p.inst_counters[4] p.inst_counters[5] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
         msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
         hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution", color=:green)
@@ -249,7 +250,7 @@ end
                     printstyled(p.output, "MLE Top Sources\n", bold=true)
 
                     for src in 1:p.no_displayed_srcs
-                        print(p.output, "S$(printidxs[src]), $(printfreqs[src])%: ")
+                        print(p.output, "S$(printidxs[src]), $(printfreqs[src]*100)%: ")
                         pwmstr_to_io(p.output, printsrcs[src])
                         print(p.output, "\n")
                     end

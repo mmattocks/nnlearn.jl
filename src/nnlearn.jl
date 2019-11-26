@@ -53,7 +53,8 @@ module nnlearn
                     end
                     prior = Vector{Dirichlet{Float64}}()
                     for position in 1:size(wm)[1]
-                        push!(prior, Dirichlet(wm[position,:].*wt))
+                        normvec=wm[position,:].+=.00000001
+                        push!(prior, Dirichlet(normvec.*wt))
                     end
                     return prior
                 end

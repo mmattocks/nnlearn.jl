@@ -78,7 +78,7 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observati
                 obs_lhs[t][i]=cache[o]
             else
                 obsl = obs_lengths[o]
-                revcomp ? log_motif_expectation = log(0.5/obsl) : log_motif_expectation = log(1/obsl)#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
+                revcomp ? log_motif_expectation = log(2/obsl) : log_motif_expectation = log(4/obsl)#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
                 mixview=view(mix,o,:)
                 mixwmls=source_wmls[mixview]
                 score_mat=score_obs_sources(sources[mixview], observations[1:obsl,o], obsl, mixwmls, revcomp=revcomp)

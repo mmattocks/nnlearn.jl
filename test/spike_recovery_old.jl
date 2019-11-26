@@ -1,4 +1,4 @@
-#Testbed for synthetic spike recovery from example background
+#Test of nested sampler accuracy using a HMM-modelled background and synthetic PWM spike-in of two signals, one recurring regularly in few obs, another scattered sparsely across many
 
 using nnlearn, BGHMM, HMMBase, Distributions, Random, Serialization, Distributions
 
@@ -13,16 +13,16 @@ hmm=HMM{Univariate,Float64}([0.4016518533961019, 0.2724399569450827, 0.313863867
 struc_sig=[.1 .7 .1 .1
            .1 .1 .1 .7
            .1 .7 .1 .1]
-periodicity=6
+periodicity=10
 struc_frac_obs=.35
 
-tata_box=[.01 .01 .01 .97
-          .97 .01 .01 .01
-          .01 .01 .01 .97
-          .97 .01 .01 .01
-          .49 .01 .01 .49
-          .97 .01 .01 .01
-          .49 .01 .01 .49]
+tata_box=[.05 .05 .05 .85
+          .85 .05 .05 .05
+          .05 .05 .05 .85
+          .85 .05 .05 .05
+          .45 .05 .05 .45
+          .85 .05 .05 .05
+          .45 .05 .05 .45]
 tata_frac_obs=.8
 tata_recur_range=1:4
 
@@ -30,26 +30,30 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 250
-const no_sources = 4
+const ensemble_size = 500
+const no_sources = 2
 const source_min_bases = 3
-const source_max_bases = 9
+const source_max_bases = 12
 @assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .01
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 3
 const permute_params = [
-        ("PSFM",(no_sources, .2, .3)),
-        ("PSFM",(no_sources, .8, 1.)),
-        ("FM",()),
-        ("merge",(no_sources)),
-        ("random",(no_sources)),
-        ("reinit",(no_sources))
+        ("source",(no_sources*10, .2, .3)),
+        ("source",(no_sources*10, .2, .3)),
+        ("source",(no_sources*10, .8, 1.)),
+        ("mix",(no_sources*10)),
+        ("mix",(no_sources*10)),
+        ("mix",(no_sources*10)),
+        ("merge",(no_sources*10)),
+        ("merge",(no_sources*10)),
+        ("init",(no_sources*10)),
+        ("init",(no_sources*10))
     ]
 worker_instruction_rand=true
 
-const prior_wt=4.0
+const prior_wt=40.0
 
 #FUNCTIONS
 function setup_obs(hmm, no_obs, obsl)
@@ -62,10 +66,8 @@ function setup_obs(hmm, no_obs, obsl)
 end
 
 function spike_irreg!(obs, source, frac_obs, recur)
-    truth=Vector{Int64}()
     for o in 1:size(obs,2)
         if rand()<frac_obs
-            push!(truth, o)
             for r in rand(recur)
                 rand()<.5 && (source=nnlearn.revcomp_pwm(source))
                 pos=rand(1:size(obs,1)-1)
@@ -78,35 +80,25 @@ function spike_irreg!(obs, source, frac_obs, recur)
             end
         end
     end
-    return truth
 end
 
 function spike_struc!(obs, source, frac_obs, periodicity)
-    truth=Vector{Int64}()
-    truthpos=Vector{Vector{Int64}}()
     for o in 1:size(obs,2)
         if rand()<frac_obs
-            push!(truth, o)
             rand()<.5 && (source=nnlearn.revcomp_pwm(source))
             pos=rand(1:periodicity)
-            posvec=Vector{Int64}()
             while pos<=size(obs,1)
                 pos_ctr=pos
                 pwm_ctr=1
                 while pos_ctr<=size(obs,1)-1&&pwm_ctr<=size(source,1)
-                    println("$pos_ctr, $pwm_ctr")
-                    push!(posvec,pos_ctr)
-                    base=rand(Categorical(source[pwm_ctr,:]))
-                    obs[pos_ctr,o]=base
+                    obs[pos_ctr,o]=rand(Categorical(source[pwm_ctr,:]))
                     pos_ctr+=1
                     pwm_ctr+=1
                 end
-                pos+=periodicity+pwm_ctr
+                pos+=periodicity
             end
-            push!(truthpos,posvec)
         end
     end
-    return truth,truthpos
 end
 
 function get_BGHMM_lhs(obs,hmm)
@@ -121,8 +113,8 @@ end
 
 @info "Setting up synthetic observation set..."
 obs=setup_obs(hmm, no_obs, obsl)
-struc_truth,struc_postruth=spike_struc!(obs, struc_sig, struc_frac_obs, periodicity)
-irreg_truth=spike_irreg!(obs, tata_box, tata_frac_obs, tata_recur_range)
+spike_irreg!(obs, tata_box, tata_frac_obs, tata_recur_range)
+spike_struc!(obs, struc_sig, struc_frac_obs, periodicity)
 
 @info "Calculating background likelihood matrix..."
 bg_lhs=get_BGHMM_lhs(obs,hmm)
@@ -136,6 +128,6 @@ isfile(string(path,'/',"ens")) ? (ens = deserialize(string(path,'/',"ens"))) :
     (ens = nnlearn.Bayes_IPM_ensemble(path, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_lhs, obs, source_length_range))
 
 @info "Converging ensemble..."
-nnlearn.ns_converge!(ens, permute_params, models_to_permute, .00001, model_display=4, backup=(true,5), wkrand=worker_instruction_rand)
+nnlearn.ns_converge!(ens, permute_params, models_to_permute, .00001, model_display=2, backup=(true,5), wkrand=worker_instruction_rand)
 
 rm(path,recursive=true)
