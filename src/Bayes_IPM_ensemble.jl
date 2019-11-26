@@ -108,7 +108,7 @@ function distributed_IPM_assembly(worker_pool::Vector{Int64}, path::String, no_m
 	while model_counter <= no_models
 		wait(model_chan)
 		candidate=take!(model_chan)
-		model = ICA_PWM_model(string(model_counter), source_priors, mix_prior, bg_scores, obs, source_length_limits)
+		model = ICA_PWM_model(string(model_counter), candidate.sources, candidate.informed_sources, candidate.source_length_limits, candidate.mix_matrix, candidate.log_Li)
 		model_path=string(path,'/',model_counter)
 		serialize(model_path,model)
 		push!(ensemble_records, Model_Record(model_path,model.log_Li))
