@@ -192,7 +192,7 @@ function distance_merge(librarian::Int64, models::Vector{nnlearn.Model_Record}, 
         merger_m = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge
         s = rand(1:S) #randomly select a source to merge
         s > m.informed_sources ? #if the source is on an uninformative prior, the merger model source will be selected by mixvector similarity
-            merge_s=most_dissimilar(new_mix,merger_m.mix) : merge_s=s
+            merge_s=most_dissimilar(new_mix,merger_m.mix_matrix) : merge_s=s
         
         clean[new_mix[:,s]].=false #mark dirty any obs that start with the source
         new_sources[s] = merger_m.sources[merge_s] #copy the source
