@@ -69,7 +69,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
                 else
                     @error "Malformed permute mode code! Current supported: \"PSFM\", \"FM\", \"merge\", \"random\", \"reinit\""
                 end
-				new_m.log_Li > contour && (put!(models_chan, (job_model,id, (time()-start, job, i, job_model.log_Li, new_m.log_Li, mode))); found=true; break)
+				new_m.log_Li > contour && (put!(models_chan, (new_m ,id, (time()-start, job, i, job_model.log_Li, new_m.log_Li, mode))); found=true; break)
 				wait(job_chan)
 				fetch(job_chan)!=models && (break; break) #if the ensemble has changed during the search, update it
 			end
