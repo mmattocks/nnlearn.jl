@@ -1,5 +1,5 @@
 #### IMPLEMENTATION OF JEFF SKILLINGS' NESTED SAMPLING ALGORITHM ####
-function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64; wkrand=false)
+function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64)
     N = length(e.models) #number of sample models/particles on the posterior surface
     i = length(e.log_Li) #iterate number, index for last values
     j = i+1 #index for newly pushed values
@@ -15,12 +15,12 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64; wk
     #SELECT NEW MODEL, SAVE TO ENSEMBLE DIRECTORY, CREATE RECORD AND PUSH TO ENSEMBLE
     model_selected=false; step_report=0
     while !model_selected
-        candidate,step_report=run_permutation_routine(e, param_set, permute_limit, ll_contour, instruction_rand=wkrand)
+        candidate,step_report=run_permutation_routine(e, param_set..., permute_limit, ll_contour)
         if !(candidate===nothing)
             model_selected=true
             new_model_record = Model_Record(string(e.path,'/',e.model_counter), candidate.log_Li);
             push!(e.models, new_model_record);
-            final_model=ICA_PWM_model(string(e.model_counter), candidate.sources, candidate.informed_sources, candidate.source_length_limits, candidate.mix_matrix, candidate.log_Li)
+            final_model=ICA_PWM_model(string(e.model_counter), candidate.sources, candidate.informed_sources, candidate.source_length_limits, candidate.mix_matrix, candidate.log_Li, candidate.flags)
             serialize(new_model_record.path, final_model)
             e.model_counter +=1
         else
@@ -33,18 +33,18 @@ function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64; wk
     push!(e.log_Li, minimum([model.log_Li for model in e.models])) #log likelihood of the least likely model - the current ensemble ll contour at Xi
     push!(e.log_Xi, -i/N) #log Xi - crude estimate of the iterate's enclosed prior mass
     push!(e.log_wi, log(exp(e.log_Xi[i]) - exp(e.log_Xi[j]))) #log width of prior mass spanned by the last step
-    push!(e.log_Liwi, CLHMM.lps(e.log_Li[j],e.log_wi[j])) #log likelihood + log width = increment of evidence spanned by iterate
+    push!(e.log_Liwi, lps(e.log_Li[j],e.log_wi[j])) #log likelihood + log width = increment of evidence spanned by iterate
     push!(e.log_Zi, logaddexp(e.log_Zi[i],e.log_Liwi[j]))    #log evidence
     #information- dimensionless quantity
-    push!(e.Hi, CLHMM.lps(
-            (exp(CLHMM.lps(e.log_Liwi[j],-e.log_Zi[j])) * e.log_Li[j]), #term1
-            (exp(CLHMM.lps(e.log_Zi[i],-e.log_Zi[j])) * CLHMM.lps(e.Hi[i],e.log_Zi[i])), #term2
+    push!(e.Hi, lps(
+            (exp(lps(e.log_Liwi[j],-e.log_Zi[j])) * e.log_Li[j]), #term1
+            (exp(lps(e.log_Zi[i],-e.log_Zi[j])) * lps(e.Hi[i],e.log_Zi[i])), #term2
             -e.log_Zi[j])) #term3
 
     return 0, step_report
 end
 
-function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_set, permute_limit::Int64, worker_persistence::BitVector)
+function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, worker_persistence::BitVector)
     N = length(e.models) #number of sample models/particles on the posterior surface
     i = length(e.log_Li) #iterate number, index for last values
     j = i+1 #index for newly pushed values
@@ -83,28 +83,28 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, param_se
     push!(e.log_Li, minimum([model.log_Li for model in e.models])) #log likelihood of the least likely model - the current ensemble ll contour at Xi
     push!(e.log_Xi, -i/N) #log Xi - crude estimate of the iterate's enclosed prior mass
     push!(e.log_wi, log(exp(e.log_Xi[i]) - exp(e.log_Xi[j]))) #log width of prior mass spanned by the last step
-    push!(e.log_Liwi, CLHMM.lps(e.log_Li[j],e.log_wi[j])) #log likelihood + log width = increment of evidence spanned by iterate
+    push!(e.log_Liwi, lps(e.log_Li[j],e.log_wi[j])) #log likelihood + log width = increment of evidence spanned by iterate
     push!(e.log_Zi, logaddexp(e.log_Zi[i],e.log_Liwi[j]))    #log evidence
 
     #information- dimensionless quantity
-    push!(e.Hi, CLHMM.lps(
-            (exp(CLHMM.lps(e.log_Liwi[j],-e.log_Zi[j])) * e.log_Li[j]), #term1
-            (exp(CLHMM.lps(e.log_Zi[i],-e.log_Zi[j])) * CLHMM.lps(e.Hi[i],e.log_Zi[i])), #term2
+    push!(e.Hi, lps(
+            (exp(lps(e.log_Liwi[j],-e.log_Zi[j])) * e.log_Li[j]), #term1
+            (exp(lps(e.log_Zi[i],-e.log_Zi[j])) * lps(e.Hi[i],e.log_Zi[i])), #term2
             -e.log_Zi[j])) #term3
 
     return 0, wk, step_report
 end
 
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001; model_display=1, backup::Tuple{Bool,Int64}=(false,0), wkrand=false, verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001; model_display=1, backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
     
     iterate = length(e.log_Li) #get the iterate from the enemble 
     meter = ProgressNS(e.naive_lh, typemax(Float64), [1], "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
 
-    while CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= CLHMM.lps(log_frac,e.log_Zi[end])
+    while lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the enemble 
-        warn,step_report = nested_step!(e,  param_set, permute_limit, wkrand=wkrand) #step the ensemble
+        warn,step_report = nested_step!(e, param_set, permute_limit) #step the ensemble
         warn == 1 && #"1" passed for warn code means no workers persist; all have hit the permute limit
                 (@error "All workers failed to find new models, aborting at current iterate."; return e) #if there is a warning, iust return the ensemble and print info
         iterate += 1
@@ -122,7 +122,8 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 end
 
     
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), wkrand::Vector{Bool}=Vector{Bool}(falses(length(worker_pool))), verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), compress::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
+    compress[1] && @eval JLD2 COMPRESS=true #if the compress switch is on make sure JLD2 is set to compress archives
     N = length(e.models)
     log_frac=log(evidence_fraction)
 
@@ -132,19 +133,19 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
 
     worker_persistence=trues(length(worker_pool))
 
-    @assert length(param_set)==length(worker_pool) "Each worker must have a parameter set!"
+    @assert length(param_sets)==length(worker_pool) "Each worker must have a parameter set!"
 
     for (x,worker) in enumerate(worker_pool)
         librarian = librarians[Int(ceil(x*(length(librarians)/length(worker_pool))))]
-        remote_do(worker_permute, worker, e, librarian, job_chan, model_chan, param_set[x], permute_limit, instruction_rand=wkrand[x])
+        remote_do(worker_permute, worker, e, librarian, job_chan, model_chan, param_sets[x]..., permute_limit)
     end
 
     iterate = length(e.log_Li) #get the iterate from the ensemble 
     meter = ProgressNS(e.naive_lh, typemax(Float64), worker_pool, "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
 
-    while CLHMM.lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= CLHMM.lps(log_frac,e.log_Zi[end])
+    while lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the ensemble 
-        warn, wk, step_report = nested_step!(e, model_chan, param_set, permute_limit, worker_persistence) #step the ensemble
+        warn, wk, step_report = nested_step!(e, model_chan, worker_persistence) #step the ensemble
         warn == 1 && #"1" passed for warn code means no workers persist; all have hit the permute limit
                 (@error "All workers failed to find new models, aborting at current iterate."; return e) #if there is a warning, iust return the ensemble and print info
         iterate += 1
@@ -152,6 +153,8 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, li
         take!(job_chan); put!(job_chan,e.models)
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.path,'/',"ens"), e) #every backup interval, serialise the ensemble
+
+        compress[1] && iterate%compress[2] == 0 && compress_posterior(e)
 
         e_update_progress(e,meter,log_frac,wk,step_report,model_display)        
     end
@@ -170,8 +173,8 @@ end
                     if model_display>0
                         max_Li,max_idx=findmax(Li_vec)
                         max_model=deserialize(e.models[max_idx].path)
-                        update!(meter, e.log_Li[end], max_Li, CLHMM.lps(max_Li,  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...,sources=max_model.sources,bitmatrix=max_model.mix_matrix)
+                        update!(meter, e.log_Li[end], max_Li, lps(max_Li,  e.log_Xi[end]), lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...,sources=max_model.sources,bitmatrix=max_model.mix_matrix)
                     else
-                        update!(meter, e.log_Li[end], max_Li, CLHMM.lps(max_Li,  e.log_Xi[end]), CLHMM.lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...)
+                        update!(meter, e.log_Li[end], max_Li, lps(max_Li,  e.log_Xi[end]), lps(log_frac,e.log_Zi[end]), e.Hi[end], Li_vec, wk, step_report...)
                     end
                 end

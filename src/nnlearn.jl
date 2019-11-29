@@ -5,7 +5,7 @@ Functions to learn a metamotif model of nucleosome positions by nested sampling
 """
 
 module nnlearn
-    using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributed, Distributions, CLHMM, HMMBase, ProgressMeter, Serialization, UnicodePlots
+    using BenchmarkTools, BGHMM, BioSequences, DataFrames, Distributed, Distributions, ProgressMeter, Serialization, UnicodePlots, JLD2
     import ProgressMeter: AbstractProgress
     import Printf: @sprintf
     import StatsFuns: logaddexp, logsumexp #both are needed as logsumexp for two terms is deprecated
@@ -49,11 +49,13 @@ module nnlearn
 
                 function estimate_dirichlet_prior_on_wm(wm::Matrix{Float64}, wt::Float64)
                     for i in 1:size(wm)[1]
-                        @assert HMMBase.isprobvec(wm[i,:])
+                        !(isprobvec(wm[i,:])) && throw(DomainError("Bad weight vec supplied to estimate_dirichlet_prior_on_wm! $(wm[i,:])"))
                     end
                     prior = Vector{Dirichlet{Float64}}()
                     for position in 1:size(wm)[1]
-                        normvec=wm[position,:].+=.00000001
+                        normvec=wm[position,:]
+                        zero_idxs=findall(isequal(0.),wm[position,:])
+                        normvec[zero_idxs].+=10^-99
                         push!(prior, Dirichlet(normvec.*wt))
                     end
                     return prior
@@ -69,7 +71,15 @@ module nnlearn
         wms=wms[represented_sources]
         return mix[:,represented_sources]
     end
-            
+    
+    #subfuncs to handle sums of log probabilities that may include -Inf (ie p=0), returning -Inf in this case rather than NaNs
+    function lps(adjuvants::AbstractArray)
+        prob = sum(adjuvants) ; isnan(prob) ? - Inf : prob
+    end
+    
+    function lps(base, adjuvants...)::Float64
+        prob = base+sum(adjuvants) ; isnan(prob) ? -Inf : prob
+    end
 
     include("ICA_PWM_model.jl")
     include("Bayes_IPM_ensemble.jl")

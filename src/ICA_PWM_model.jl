@@ -5,6 +5,7 @@ struct ICA_PWM_model
     source_length_limits::UnitRange{Int64} #min/max source lengths for init and permutation
     mix_matrix::BitMatrix # obs x sources bool matrix
     log_Li::Float64
+    flags::Vector{String} #optional flags for search patterns
 end
 
 #ICA_PWM_model FUNCTIONS
@@ -19,7 +20,7 @@ function init_IPM(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}
     mix=init_mix_matrix(mix_prior,O,S)
     log_lh = IPM_likelihood(sources, observations, obs_lengths, bg_scores, mix)
 
-   return ICA_PWM_model(name, sources, size(mix_prior[1],2), source_length_limits, mix, log_lh)
+   return ICA_PWM_model(name, sources, size(mix_prior[1],2), source_length_limits, mix, log_lh, ["init"])
 end
 
                 #init_IPM SUBFUNCS
@@ -35,7 +36,7 @@ end
                                 if position >= prior_coord #skip prior positions that are before the selected prior_coord
                                     sample_coord = min(position-prior_coord+1,PWM_length) #sample_coord is the position on the sampled PWM
                                     PWM[sample_coord, :] = rand(dirichlet) #draw the position WM from the dirichlet
-                                    @assert HMMBase.isprobvec(PWM[sample_coord, :]) #make sure it's a valid probvec
+                                    !isprobvec(PWM[sample_coord, :]) && throw(DomainError("Bad weight vec produced by init_sources! $(PWM[sample_coord,:])"))#make sure it's a valid probvec
                                 end
                             end
                             push!(srcvec, (log.(PWM), prior_coord)) #push the source PWM to the source vector with the prior coord idx to allow drawing from the appropriate prior dirichlets on permuting source length
@@ -78,7 +79,7 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observati
                 obs_lhs[t][i]=cache[o]
             else
                 obsl = obs_lengths[o]
-                revcomp ? log_motif_expectation = log(2/obsl) : log_motif_expectation = log(4/obsl)#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
+                revcomp ? log_motif_expectation = log(0.5/obsl) : log_motif_expectation = log(1/obsl)#log_motif_expectation-nMica has 0.5 per base for including the reverse complement, 1 otherwise
                 mixview=view(mix,o,:)
                 mixwmls=source_wmls[mixview]
                 score_mat=score_obs_sources(sources[mixview], observations[1:obsl,o], obsl, mixwmls, revcomp=revcomp)
@@ -97,18 +98,18 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observati
         end
     end
 
-    returncache ? (return CLHMM.lps([CLHMM.lps(obs_lhs[t]) for t in 1:nt]), vcat(obs_lhs...)) : (return CLHMM.lps([CLHMM.lps(obs_lhs[t]) for t in 1:nt]))
+    returncache ? (return lps([lps(obs_lhs[t]) for t in 1:nt]), vcat(obs_lhs...)) : (return lps([lps(obs_lhs[t]) for t in 1:nt]))
 end
 
                 function score_obs_sources(sources::Vector{Tuple{Matrix{Float64},Int64}}, observation::Vector{Int64}, obsl::Int64, source_wmls::Vector{Int64}; revcomp=true) 
-                    scores=Vector{Matrix{Float64}}()
+                    scores=Vector{Matrix{Float64}}(undef, length(sources))
 
                     for (s,source) in enumerate(sources)
                         pwm = source[1] #get the PWM from the source tuple
                         wml = source_wmls[s] #weight matrix length
                         source_stop=obsl-wml+1 #stop scannng th source across the observation here
 
-                        push!(scores, nnlearn.score_source(observation, pwm, source_stop, revcomp)) #get the scores for this oxs
+                        scores[s]=nnlearn.score_source(observation, pwm, source_stop, revcomp) #get the scores for this oxs
                     end
 
                     return scores
@@ -147,8 +148,9 @@ end
                 
                     @inbounds for i in 2:L #i=1 is ithe lh_vec initializing 0, i=2 is the score of the first background position (ie t=1)
                         t=i-1
-                        score = CLHMM.lps(lh_vec[i-1], bg_scores[t], cardinality_penalty)
+                        score = lps(lh_vec[i-1], bg_scores[t], cardinality_penalty)
                 
+                        #logic: all observations are scored from t=wml to the end of the obs-therefore check at each position for new sources to add (indexed by vector position to retrieve source wml and score matrix)
                         if length(osi_emitting)<length(obs_source_indices)
                             for n in 1:length(obs_source_indices)
                                 if !(n in osi_emitting)
@@ -160,14 +162,14 @@ end
                         for n in osi_emitting
                             wml = source_wmls[n]
                             from_score = lh_vec[i-wml+1] #score at the first position of the PWM
-                            score_array = score_mat[n]
-                            score_idx = t - wml + 1
+                            score_array = score_mat[n] #get the source score matrix
+                            score_idx = t - wml + 1 #translate t to score_array idx for emission score
                             emit_score = score_array[score_idx,1] #emission score at the last position of the PWM
                 
-                            score = logaddexp(score, CLHMM.lps(from_score, emit_score, log_motif_expectation))
+                            score = logaddexp(score, lps(from_score, emit_score, log_motif_expectation))
                             if revcomp #repeat each source contribution with the revcomp score vector if required
                                 emit_score = score_array[score_idx,2]
-                                score = logaddexp(score, CLHMM.lps(from_score, emit_score, log_motif_expectation))
+                                score = logaddexp(score, lps(from_score, emit_score, log_motif_expectation))
                             end
                         end
                         lh_vec[i] = score

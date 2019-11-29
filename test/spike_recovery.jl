@@ -16,13 +16,13 @@ struc_sig=[.1 .7 .1 .1
 periodicity=6
 struc_frac_obs=.35
 
-tata_box=[.01 .01 .01 .97
-          .97 .01 .01 .01
-          .01 .01 .01 .97
-          .97 .01 .01 .01
-          .49 .01 .01 .49
-          .97 .01 .01 .01
-          .49 .01 .01 .49]
+tata_box=[.05 .05 .05 .85
+          .85 .05 .05 .05
+          .05 .05 .05 .85
+          .85 .05 .05 .05
+          .425 .075 .075 .425
+          .85 .05 .05 .05
+          .425 .075 .075 .425]
 tata_frac_obs=.8
 tata_recur_range=1:4
 
@@ -31,7 +31,7 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 #JOB CONSTANTS
 const position_size = 141
 const ensemble_size = 250
-const no_sources = 4
+const no_sources = 2
 const source_min_bases = 3
 const source_max_bases = 9
 @assert source_min_bases < source_max_bases
@@ -39,17 +39,34 @@ const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .01
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 3
-const permute_params = [
-        ("PSFM",(no_sources, .2, .3)),
-        ("PSFM",(no_sources, .8, 1.)),
-        ("FM",()),
-        ("merge",(no_sources)),
-        ("random",(no_sources)),
-        ("reinit",(no_sources))
-    ]
-worker_instruction_rand=true
 
-const prior_wt=4.0
+job_sets=[
+([
+    ("PS", (no_sources)),
+    ("PM", (no_sources)),
+    ("PSFM", (no_sources)),
+    ("PSFM", (no_sources, .8, 1.)),
+    ("FM", ()),
+    ("DM", (no_sources)),
+    ("SM", (no_sources)),
+    ("RD", (no_sources)),
+    ("RI", (no_sources))
+],[.025, .025, .025, .025, .8, .025, .025, .025, .025]),
+([
+    ("PS", (no_sources)),
+    ("PM", (no_sources)),
+    ("PSFM", (no_sources)),
+    ("PSFM", (no_sources, .8, 1.)),
+    ("FM", ()),
+    ("DM", (no_sources)),
+    ("SM", (no_sources)),
+    ("RD", (no_sources)),
+    ("RI", (no_sources))
+],[.10, .20, .15, .05, .05, 0.15, 0.15, 0.10, 0.05]),
+]
+job_limit=8
+
+const prior_wt=3.0
 
 #FUNCTIONS
 function setup_obs(hmm, no_obs, obsl)
@@ -94,7 +111,6 @@ function spike_struc!(obs, source, frac_obs, periodicity)
                 pos_ctr=pos
                 pwm_ctr=1
                 while pos_ctr<=size(obs,1)-1&&pwm_ctr<=size(source,1)
-                    println("$pos_ctr, $pwm_ctr")
                     push!(posvec,pos_ctr)
                     base=rand(Categorical(source[pwm_ctr,:]))
                     obs[pos_ctr,o]=base
@@ -135,7 +151,11 @@ path=randstring()
 isfile(string(path,'/',"ens")) ? (ens = deserialize(string(path,'/',"ens"))) :
     (ens = nnlearn.Bayes_IPM_ensemble(path, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_lhs, obs, source_length_range))
 
+
+job_set_thresh=[-Inf,ens.naive_lh]
+param_set=(job_sets,job_set_thresh,job_limit)
+    
 @info "Converging ensemble..."
-nnlearn.ns_converge!(ens, permute_params, models_to_permute, .00001, model_display=4, backup=(true,5), wkrand=worker_instruction_rand)
+nnlearn.ns_converge!(ens, param_set, models_to_permute, .01, model_display=no_sources, backup=(true,5))
 
 rm(path,recursive=true)

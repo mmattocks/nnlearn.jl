@@ -17,7 +17,7 @@ colour_dict = Dict{Char,String}('A'=>"(0,128,0)", #green
 lwcs_vec=['a','c','g','t']
 upcs_vec=['A','C','G','T']
 cs_vec=[:green,:blue,:yellow,:red]
-thresh_dict=Dict([(0.,'_'),(.5,'.'),(1.,"lwcs"),(1.5,"upcs")])
+thresh_dict=Dict([(0.,'_'),(.25,'.'),(.5,"lwcs"),(1,"upcs")])
 
 source_left_x = 10
 xlen = 20
@@ -86,7 +86,6 @@ function pwmstr_to_io(io,source;log=true)
 end
 
 function uni_wvec_params(wvec) #assign a single unicode char and color symbol for the most informational position in a position weight vector
-    !HMMBase.isprobvec(wvec) && throw()
     wvec.+=10^-99
     wvec = [x/sum(wvec) for x in wvec]
     infscore=(2.0 + sum([x*log(2,x) for x in wvec]))

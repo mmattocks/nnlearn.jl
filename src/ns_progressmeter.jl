@@ -76,7 +76,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          zeros(Int64,length(workers)),
          [[0.] for i in 1:length(workers)],
          ["none" for worker in 1:length(workers)],
-         zeros(Int64,5),
+         zeros(Int64,8),
          0.,
          eff_iterates,
          no_displayed_srcs,
@@ -93,11 +93,14 @@ ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::Abstrac
 
 function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction; sources=[(zeros(0,0),0)], bitmatrix=falses(0,0), options...)
     
-    instruction == "PSFM" && (p.inst_counters[1]+=1)
-    instruction == "FM" && (p.inst_counters[2]+=1)
-    instruction == "merge" && (p.inst_counters[3]+=1)
-    instruction == "random" && (p.inst_counters[4]+=1)
-    instruction == "reinit" && (p.inst_counters[5]+=1)
+    instruction == "PS" && (p.inst_counters[1]+=1)
+    instruction == "PM" && (p.inst_counters[2]+=1)
+    instruction == "PSFM" && (p.inst_counters[3]+=1)
+    instruction == "FM" && (p.inst_counters[4]+=1)
+    instruction == "RD" && (p.inst_counters[5]+=1)
+    instruction == "DM" && (p.inst_counters[6]+=1)
+    instruction == "SM" && (p.inst_counters[7]+=1)
+    instruction == "RS" && (p.inst_counters[8]+=1)
 
     p.counter += 1
     stps_elapsed=p.counter-p.start_it
@@ -184,8 +187,9 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
         lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")
         
-        msg1 = @sprintf "%s Step %i::Wk:%g: P|F|M|R|I:%s|%s|%s|%s|%s T μ,Δ: %s,%s CI: %g ETC: %s" p.desc p.counter p.stepworker p.inst_counters[1] p.inst_counters[2] p.inst_counters[3] p.inst_counters[4] p.inst_counters[5] hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
-        msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
+        msg1 = @sprintf "%s Step %i::Wk:%g: PS|PM|PSFM|FM|DM|SM|RD|RI:%s|%s|%s|%s|%s|%s|%s|%s" p.desc p.counter p.stepworker p.inst_counters[1] p.inst_counters[2] p.inst_counters[3] p.inst_counters[4] p.inst_counters[5] p.inst_counters[6] p.inst_counters[7] p.inst_counters[8]
+        msg2 = @sprintf "Step time μ, last Δ: %s,%s Convergence Interval: %g ETC: %s" hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
+        msg3 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
         hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution", color=:green)
 
@@ -201,7 +205,9 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
         p.no_displayed_srcs>0 && printsources(p)
         ProgressMeter.printover(p.output, msg1, :magenta)
         print(p.output, "\n")
-        ProgressMeter.printover(p.output, msg2, p.color)
+        ProgressMeter.printover(p.output, msg2, :cyan)
+        print(p.output, "\n")
+        ProgressMeter.printover(p.output, msg3, p.color)
         print(p.output, "\n")
         show(p.output, hist)
         print(p.output, "\n")

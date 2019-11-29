@@ -19,6 +19,7 @@ mutable struct Bayes_IPM_ensemble
 
 	sample_posterior::Bool
 	retained_posterior_samples::Vector{Model_Record} #list of posterior sample records
+	compressed_posterior::Vector{String} #list of compressed model paths
 
 	model_counter::Int64
 
@@ -108,7 +109,7 @@ function distributed_IPM_assembly(worker_pool::Vector{Int64}, path::String, no_m
 	while model_counter <= no_models
 		wait(model_chan)
 		candidate=take!(model_chan)
-		model = ICA_PWM_model(string(model_counter), candidate.sources, candidate.informed_sources, candidate.source_length_limits, candidate.mix_matrix, candidate.log_Li)
+		model = ICA_PWM_model(string(model_counter), candidate.sources, candidate.informed_sources, candidate.source_length_limits, candidate.mix_matrix, candidate.log_Li, candidate.flags)
 		model_path=string(path,'/',model_counter)
 		serialize(model_path,model)
 		push!(ensemble_records, Model_Record(model_path,model.log_Li))
@@ -144,3 +145,11 @@ end
 						put!(models_chan,model)
 					end
 				end
+
+function compress_posterior(e::Bayes_IPM_ensemble)
+	for record in e.retained_posterior_samples
+		m=deserialize(record.path)
+		
+	end
+end
+
