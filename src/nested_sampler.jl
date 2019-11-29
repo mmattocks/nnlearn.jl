@@ -122,8 +122,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 end
 
     
-function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), compress::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
-    compress[1] && @eval JLD2 COMPRESS=true #if the compress switch is on make sure JLD2 is set to compress archives
+function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
 
@@ -153,8 +152,6 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, l
         take!(job_chan); put!(job_chan,e.models)
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.path,'/',"ens"), e) #every backup interval, serialise the ensemble
-
-        compress[1] && iterate%compress[2] == 0 && compress_posterior(e)
 
         e_update_progress(e,meter,log_frac,wk,step_report,model_display)        
     end

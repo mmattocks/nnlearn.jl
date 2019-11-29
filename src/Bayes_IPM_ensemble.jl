@@ -19,7 +19,6 @@ mutable struct Bayes_IPM_ensemble
 
 	sample_posterior::Bool
 	retained_posterior_samples::Vector{Model_Record} #list of posterior sample records
-	compressed_posterior::Vector{String} #list of compressed model paths
 
 	model_counter::Int64
 
@@ -145,11 +144,3 @@ end
 						put!(models_chan,model)
 					end
 				end
-
-function compress_posterior(e::Bayes_IPM_ensemble)
-	for record in e.retained_posterior_samples
-		m=deserialize(record.path)
-		
-	end
-end
-
