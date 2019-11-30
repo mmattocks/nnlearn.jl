@@ -5,7 +5,7 @@ using nnlearn, BGHMM, HMMBase, Distributions, Random, Serialization, Distributio
 Random.seed!(786)
 
 #CONSTANTS
-no_obs=5000
+no_obs=1000
 obsl=140
 
 hmm=HMM{Univariate,Float64}([0.4016518533961019, 0.2724399569450827, 0.3138638675018568, 0.012044322156962559], [3.016523036789942e-9 2.860631288328858e-6 0.2299906524188302 0.7700064839333549; 3.0102278323431375e-11 0.7494895424906354 0.23378615437778671 0.016724303101477486; 8.665894321573098e-17 0.2789950381410553 0.7141355461949104 0.006869415664033568; 0.006872526597796038 0.016052425322133648 0.017255179541768192 0.9598198685383041], [Categorical([0.1582723599684065, 0.031949729618356536, 0.653113286526948, 0.15666462388628763]), Categorical([0.4610499748798372, 0.2613013005680122, 0.15161801872560146, 0.12603070582654768]), Categorical([0.08601960130086236, 0.13869192872427524, 0.26945182329686523, 0.5058366466779973]), Categorical([0.3787366527613563, 0.11034604356978756, 0.1119586976058099, 0.3989586060630392])])
@@ -13,7 +13,7 @@ hmm=HMM{Univariate,Float64}([0.4016518533961019, 0.2724399569450827, 0.313863867
 struc_sig=[.1 .7 .1 .1
            .1 .1 .1 .7
            .1 .7 .1 .1]
-periodicity=6
+periodicity=8
 struc_frac_obs=.35
 
 tata_box=[.05 .05 .05 .85
@@ -23,20 +23,20 @@ tata_box=[.05 .05 .05 .85
           .425 .075 .075 .425
           .85 .05 .05 .05
           .425 .075 .075 .425]
-tata_frac_obs=.8
+tata_frac_obs=.7
 tata_recur_range=1:4
 
 combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 250
-const no_sources = 2
+const ensemble_size = 100
+const no_sources = 3
 const source_min_bases = 3
-const source_max_bases = 9
+const source_max_bases = 12
 @assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
-const mixing_prior = .01
+const mixing_prior = .3
 @assert mixing_prior >= 0 && mixing_prior <= 1
 const models_to_permute = ensemble_size * 3
 
@@ -45,28 +45,31 @@ job_sets=[
     ("PS", (no_sources)),
     ("PM", (no_sources)),
     ("PSFM", (no_sources)),
-    ("PSFM", (no_sources, .8, 1.)),
+    ("PSFM", (no_sources*10, .8, 1.)),
     ("FM", ()),
     ("DM", (no_sources)),
     ("SM", (no_sources)),
     ("RD", (no_sources)),
-    ("RI", (no_sources))
-],[.025, .025, .025, .025, .8, .025, .025, .025, .025]),
+    ("RI", (no_sources)),
+    ("EM", (no_sources))
+],[.025, .025, .025, .025, .775, .025, .025, .025, .025, .025]),
 ([
     ("PS", (no_sources)),
     ("PM", (no_sources)),
     ("PSFM", (no_sources)),
-    ("PSFM", (no_sources, .8, 1.)),
+    ("PSFM", (no_sources, 0., 1.)),
+    ("PSFM", (no_sources, 0.8, .0)),
     ("FM", ()),
     ("DM", (no_sources)),
     ("SM", (no_sources)),
     ("RD", (no_sources)),
-    ("RI", (no_sources))
-],[.10, .20, .15, .05, .05, 0.15, 0.15, 0.10, 0.05]),
+    ("RI", (no_sources*10)),
+    ("EM", (no_sources))
+],[.05, .15, .15, .10, .05, .20, 0.0, 0.05, 0.15, 0.10, .0]),
 ]
-job_limit=8
+job_limit=4
 
-const prior_wt=3.0
+const prior_wt=1.1
 
 #FUNCTIONS
 function setup_obs(hmm, no_obs, obsl)
@@ -144,7 +147,9 @@ irreg_truth=spike_irreg!(obs, tata_box, tata_frac_obs, tata_recur_range)
 bg_lhs=get_BGHMM_lhs(obs,hmm)
 
 @info "Assembling source priors..."
-source_priors = nnlearn.assemble_source_priors(no_sources, [struc_sig,tata_box], prior_wt, source_length_range)
+#prior_array= [struc_sig, tata_box]
+prior_array= Vector{Matrix{Float64}}()
+source_priors = nnlearn.assemble_source_priors(no_sources, prior_array, prior_wt, source_length_range)
 
 @info "Assembling ensemble..."
 path=randstring()
@@ -156,6 +161,8 @@ job_set_thresh=[-Inf,ens.naive_lh]
 param_set=(job_sets,job_set_thresh,job_limit)
     
 @info "Converging ensemble..."
-nnlearn.ns_converge!(ens, param_set, models_to_permute, .01, model_display=no_sources, backup=(true,5))
+nnlearn.ns_converge!(ens, param_set, models_to_permute, .0001, model_display=no_sources, backup=(true,5))
 
 rm(path,recursive=true)
+
+#811973

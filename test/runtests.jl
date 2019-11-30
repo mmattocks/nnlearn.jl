@@ -335,8 +335,7 @@ end
     @test cons_model.sources[2]!=duplicate_sources[2]
     @test cons_model.sources[3]!=duplicate_sources[3]
     @test cons_model.mix_matrix[:,1]==[true, true, false, false, false, false, false, false, true, true]
-    @test "consolidate" in cons_model.flags
-    @test "FM from candidate" in cons_model.flags
+    @test "FM from consolidate" in cons_model.flags
     @test "nofit" in cons_model.flags
 
 
@@ -353,7 +352,7 @@ end
     @test "PM from test" in pm_model.flags
 
     badmix_lh=nnlearn.IPM_likelihood(test_model.sources,obs,obsl, bg_scores, trues(2,3))
-    badmix=nnlearn.ICA_PWM_model("badmix",test_model.sources, test_model.informed_sources, test_model.source_length_limits, trues(2,3), badmix_lh,Vector{String}())
+    badmix=nnlearn.ICA_PWM_model("badmix",test_model.sources, test_model.informed_sources, test_model.source_length_limits, trues(2,3), badmix_lh,[""])
     psfm_model=nnlearn.perm_src_fit_mix(badmix, badmix.log_Li,obs, obsl, bg_scores, source_priors, 1000)
     @test psfm_model.log_Li > badmix.log_Li
     @test psfm_model.sources != badmix.sources
@@ -389,7 +388,7 @@ end
 
     erosion_lh=nnlearn.IPM_likelihood(erosion_sources,obs,obsl, bg_scores, eroded_mix)
 
-    erosion_model=nnlearn.ICA_PWM_model("erode", erosion_sources, test_model.informed_sources, test_model.source_length_limits,eroded_mix, erosion_lh, Vector{String}())
+    erosion_model=nnlearn.ICA_PWM_model("erode", erosion_sources, test_model.informed_sources, test_model.source_length_limits,eroded_mix, erosion_lh, [""])
 
     eroded_model=nnlearn.erode_model(erosion_model, erosion_model.log_Li, obs, obsl, bg_scores, source_priors, 1000)
     @test eroded_model.log_Li > erosion_model.log_Li
@@ -409,7 +408,8 @@ end
     @test dm_model.log_Li > test_model.log_Li
     @test dm_model.sources != test_model.sources
     @test dm_model.mix_matrix != test_model.mix_matrix
-    @test "DM from test" in dm_model.flags
+    @test "FM from consolidate" in dm_model.flags
+    #@test "DM from test" in dm_model.flags
 
     sm_model=nnlearn.similarity_merge([test_record], test_model, test_model.log_Li, obs, obsl, bg_scores, source_priors, 1000)
     @test sm_model.log_Li > test_model.log_Li
@@ -426,7 +426,7 @@ end
     @test ddm_model.mix_matrix != test_model.mix_matrix
     @test "DM from test" in ddm_model.flags
 
-    dsm_model=nnlearn.similarity_merge(librarian[1], [test_record], test_model, test_model.log_Li, obs, obsl, bg_scores, source_priors, 1000)
+    dsm_model=nnlearn.similarity_merge(librarian[1], [test_record], rd_model, test_model.log_Li, obs, obsl, bg_scores, source_priors, 1000)
     @test dsm_model.log_Li > test_model.log_Li
     @test dsm_model.sources != test_model.sources
     @test dsm_model.mix_matrix != test_model.mix_matrix
@@ -450,8 +450,9 @@ end
     .1 .2 .6 .1]
 
     src_length_limits=2:12
+    no_sources=4
 
-    source_priors = nnlearn.assemble_source_priors(4, [source_pwm, source_pwm_2], 4.0, src_length_limits)
+    source_priors = nnlearn.assemble_source_priors(no_sources, [source_pwm, source_pwm_2], 4.0, src_length_limits)
     mix_prior=.5
 
     bg_scores = log.(fill(.1, (30,27)))
@@ -520,10 +521,39 @@ end
     rm(distdir, recursive=true)
 
     permute_limit = 900
-    param_set = [("source",(10,.25,.5)),("mix",(10)),("merge",(10)),("init",(10))]
+    job_sets=[
+([
+    ("PS", (no_sources)),
+    ("PM", (no_sources)),
+    ("PSFM", (no_sources)),
+    ("PSFM", (no_sources, .8, 1.)),
+    ("FM", ()),
+    ("DM", (no_sources)),
+    ("SM", (no_sources)),
+    ("RD", (no_sources)),
+    ("RI", (no_sources)),
+    ("EM", (no_sources))
+],[.025, .025, .025, .025, .775, .025, .025, .025, .025, .025]),
+([
+    ("PS", (no_sources)),
+    ("PM", (no_sources)),
+    ("PSFM", (no_sources)),
+    ("PSFM", (no_sources, .8, 1.)),
+    ("FM", ()),
+    ("DM", (no_sources)),
+    ("SM", (no_sources)),
+    ("RD", (no_sources)),
+    ("RI", (no_sources)),
+    ("EM", (no_sources))
+],[.15, .15, .15, .05, .05, 0.10, 0.10, 0.10, 0.05, .10]),
+]
+    job_limit=8
+    job_set_thresh=[-Inf,ensemble.naive_lh]
+    param_set=(job_sets,job_set_thresh,job_limit)
+
 
     @info "Testing threaded convergence..."
-    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, .1, wkrand=true, model_display=4)
+    sp_logZ = nnlearn.ns_converge!(sp_ensemble, param_set, permute_limit, 10., model_display=4)
 
     @test length(sp_ensemble.models) == 200
     @test length(sp_ensemble.log_Li) == length(sp_ensemble.log_Xi) == length(sp_ensemble.log_wi) == length(sp_ensemble.log_Liwi) == length(sp_ensemble.log_Zi) == length(sp_ensemble.Hi) == sp_ensemble.model_counter-200
@@ -544,7 +574,7 @@ end
     @everywhere Random.seed!(1)
     
     ####CONVERGE############
-    final_logZ = nnlearn.ns_converge!(ensemble, [param_set, param_set], permute_limit, librarians, worker_pool, .1, backup=(true,250), wkrand=[false,true], model_display=4)
+    final_logZ = nnlearn.ns_converge!(ensemble, [param_set,param_set], permute_limit, librarians, worker_pool, 10., backup=(true,250), model_display=4)
 
     rmprocs(worker_pool)
     rmprocs(librarians)

@@ -81,6 +81,38 @@ module nnlearn
         prob = base+sum(adjuvants) ; isnan(prob) ? -Inf : prob
     end
 
+    function infocenter_wms_trim(wm::Matrix{Float64}, trimsize::Int64)
+        !(size(wm,2)==4) && throw(DomainError("Bad wm! 2nd dimension should be size 4"))
+        infovec=get_pwm_info(wm, logsw=false)
+        maxval, maxidx=findmax(infovec)
+        upstream_extension=Int(floor((trimsize-1)/2))
+        downstream_extension=Int(ceil((trimsize-1)/2))
+        1+upstream_extension+downstream_extension > size(wm,1) && throw(DomainError("Src too short for trim! $upstream_extension $downstream_extension"))
+        return wm[max(1,maxidx-upstream_extension):min(maxidx+downstream_extension,size(wm,1)),:]
+    end
+
+    function filter_priors(target_src_no::Int64, target_src_size::Int64, prior_wms::Vector{Matrix{Float64}}, prior_mix::BitMatrix)
+        wms=Vector{Matrix{Float64}}(undef, target_src_no)
+        freqsort_idxs=sortperm([sum(prior_mix[:,s]) for s in 1:length(prior_wms)])
+        for i in 1:target_src_no
+            target_src_idx=freqsort_idxs[i]
+            push!(wms,infocenter_wms_trim(prior_wms[target_src_idx], target_src_size))
+        end
+        return wms
+    end
+
+    function combine_filter_priors(target_src_no::Int64, target_src_size::Int64, prior_wms::Tuple{Vector{Matrix{Float64}},Vector{Matrix{Float64}}}, prior_mix::Tuple{BitMatrix,BitMatrix})
+        wms=Vector{Matrix{Float64}}(undef, target_src_no)
+        cat_wms=vcat(prior_wms[1],prior_wms[2])
+        cat_mix=vcat(prior_mix[1],prior_mix[2])
+        freqsort_idxs=sortperm([sum(cat_mix[:,s]) for s in 1:length(cat_wms)])
+        for i in 1:target_src_no
+            target_src_idx=freqsort_idxs[i]
+            push!(wms,infocenter_wms_trim(prior_wms[target_src_idx], target_src_size))
+        end
+        return wms
+    end
+
     include("ICA_PWM_model.jl")
     include("Bayes_IPM_ensemble.jl")
     include("nested_sampler.jl")

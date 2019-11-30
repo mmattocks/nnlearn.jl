@@ -76,7 +76,7 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          zeros(Int64,length(workers)),
          [[0.] for i in 1:length(workers)],
          ["none" for worker in 1:length(workers)],
-         zeros(Int64,8),
+         zeros(Int64,9),
          0.,
          eff_iterates,
          no_displayed_srcs,
@@ -97,10 +97,11 @@ function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker
     instruction == "PM" && (p.inst_counters[2]+=1)
     instruction == "PSFM" && (p.inst_counters[3]+=1)
     instruction == "FM" && (p.inst_counters[4]+=1)
-    instruction == "RD" && (p.inst_counters[5]+=1)
-    instruction == "DM" && (p.inst_counters[6]+=1)
-    instruction == "SM" && (p.inst_counters[7]+=1)
-    instruction == "RS" && (p.inst_counters[8]+=1)
+    instruction == "DM" && (p.inst_counters[5]+=1)
+    instruction == "SM" && (p.inst_counters[6]+=1)
+    instruction == "RD" && (p.inst_counters[7]+=1)
+    instruction == "RI" && (p.inst_counters[8]+=1)
+    instruction == "EM" && (p.inst_counters[9]+=1)
 
     p.counter += 1
     stps_elapsed=p.counter-p.start_it
@@ -155,7 +156,6 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
             msg2 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
             hist=UnicodePlots.histogram(p.li_dist, title="Ensemble Likelihood Distribution", color=:green)
-            #p.numprintedvalues=nrows(hist.graphics)
             srclines=p.no_displayed_srcs+1
             p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+16+srclines
             print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
@@ -187,7 +187,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
         lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")
         
-        msg1 = @sprintf "%s Step %i::Wk:%g: PS|PM|PSFM|FM|DM|SM|RD|RI:%s|%s|%s|%s|%s|%s|%s|%s" p.desc p.counter p.stepworker p.inst_counters[1] p.inst_counters[2] p.inst_counters[3] p.inst_counters[4] p.inst_counters[5] p.inst_counters[6] p.inst_counters[7] p.inst_counters[8]
+        msg1 = @sprintf "%s Step %i::Wk:%g: PS:%s|PM:%s|PSFM:%s|FM:%s|DM:%s|SM:%s|RD:%s|RI:%s|EM:%s" p.desc p.counter p.stepworker p.inst_counters[1] p.inst_counters[2] p.inst_counters[3] p.inst_counters[4] p.inst_counters[5] p.inst_counters[6] p.inst_counters[7] p.inst_counters[8] p.inst_counters[9]
         msg2 = @sprintf "Step time μ, last Δ: %s,%s Convergence Interval: %g ETC: %s" hmss(p.mean_stp_time) hmss(p.tstp-p.mean_stp_time) p.interval hmss(p.etc)
         msg3 = @sprintf "Ensemble Stats:: Contour: %g MaxLH: %g Max/Naive: %g H: %g" p.contour p.max_lh (p.max_lh-p.naive) p.information
 
@@ -195,7 +195,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
         #p.numprintedvalues=nrows(wk_inst.graphics)+nrows(hist.graphics)+nrows(lh_heatmap.graphics)+1
         srclines=p.no_displayed_srcs+1
-        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+16+srclines
+        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+17+srclines
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         show(p.output, wk_inst)
