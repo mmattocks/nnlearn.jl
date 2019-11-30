@@ -119,9 +119,9 @@ sib_mix_prior = nnlearn.cluster_mix_prior!(deserialize(sib_df_binary), sib_wms)
 rys_mix_prior = nnlearn.cluster_mix_prior!(deserialize(rys_df_binary), rys_wms)
 
 @info "Filtering informative priors..."
-sib_prior_wms = nnlearn.filter_priors(floor(no_sources/2), source_max_bases, sib_wms, sib_mix_prior)
-rys_prior_wms = nnlearn.filter_priors(floor(no_sources/2), source_max_bases, rys_wms, rys_mix_prior)
-combined_prior_wms = nnlearn.combine_filter_priors(floor(no_sources/2), source_max_bases, (sib_wms, rys_wms), (sib_mix_prior, rys_mix_prior))
+sib_prior_wms = nnlearn.filter_priors(Int(floor(no_sources/2)), source_max_bases, sib_wms, sib_mix_prior)
+rys_prior_wms = nnlearn.filter_priors(Int(floor(no_sources/2)), source_max_bases, rys_wms, rys_mix_prior)
+combined_prior_wms = nnlearn.combine_filter_priors(Int(floor(no_sources/2)), source_max_bases, (sib_wms, rys_wms), (sib_mix_prior, rys_mix_prior))
 
 @info "Assembling source priors..."
 sib_source_priors = nnlearn.assemble_source_priors(no_sources, sib_prior_wms, prior_wt, source_length_range)

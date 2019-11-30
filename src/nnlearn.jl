@@ -96,7 +96,7 @@ module nnlearn
         freqsort_idxs=sortperm([sum(prior_mix[:,s]) for s in 1:length(prior_wms)])
         for i in 1:target_src_no
             target_src_idx=freqsort_idxs[i]
-            push!(wms,infocenter_wms_trim(prior_wms[target_src_idx], target_src_size))
+            wms[i]=infocenter_wms_trim(prior_wms[target_src_idx], target_src_size)
         end
         return wms
     end
@@ -104,11 +104,12 @@ module nnlearn
     function combine_filter_priors(target_src_no::Int64, target_src_size::Int64, prior_wms::Tuple{Vector{Matrix{Float64}},Vector{Matrix{Float64}}}, prior_mix::Tuple{BitMatrix,BitMatrix})
         wms=Vector{Matrix{Float64}}(undef, target_src_no)
         cat_wms=vcat(prior_wms[1],prior_wms[2])
-        cat_mix=vcat(prior_mix[1],prior_mix[2])
-        freqsort_idxs=sortperm([sum(cat_mix[:,s]) for s in 1:length(cat_wms)])
+        first_freq=[sum(prior_mix[1][:,s]) for s in 1:length(prior_wms[1])]
+        second_freq=[sum(prior_mix[2][:,s]) for s in 1:length(prior_wms[2])]
+        freqsort_idxs=sortperm(vcat(first_freq,second_freq))
         for i in 1:target_src_no
             target_src_idx=freqsort_idxs[i]
-            push!(wms,infocenter_wms_trim(prior_wms[target_src_idx], target_src_size))
+            wms[i]=infocenter_wms_trim(cat_wms[target_src_idx], target_src_size)
         end
         return wms
     end
