@@ -189,8 +189,7 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
         wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
 
-        jobtime_msg= @sprintf "PS:%s|PM:%s|PSFM:%s|FM:%s|DM:%s|SM:%s|RD:%s|RI:%s|EM:%s"
-        hmss(p.job_times[1]/p.job_i1_ct[1]) hmss(p.job_times[2]/p.job_i1_ct[2]) hmss(p.job_times[3]/p.job_i1_ct[3]) hmss(p.job_times[4]/p.job_i1_ct[4]) hmss(p.job_times[5]/p.job_i1_ct[5]) hmss(p.job_times[6]/p.job_i1_ct[6]) hmss(p.job_times[7]/p.job_i1_ct[7]) hmss(p.job_times[8]/p.job_i1_ct[8]) hmss(p.job_times[9]/p.job_i1_ct[9])
+        jobtime_msg= @sprintf "PS:%s|PM:%s|PSFM:%s|FM:%s|DM:%s|SM:%s|RD:%s|RI:%s|EM:%s" hmss(p.job_times[1]/p.job_i1_ct[1]) hmss(p.job_times[2]/p.job_i1_ct[2]) hmss(p.job_times[3]/p.job_i1_ct[3]) hmss(p.job_times[4]/p.job_i1_ct[4]) hmss(p.job_times[5]/p.job_i1_ct[5]) hmss(p.job_times[6]/p.job_i1_ct[6]) hmss(p.job_times[7]/p.job_i1_ct[7]) hmss(p.job_times[8]/p.job_i1_ct[8]) hmss(p.job_times[9]/p.job_i1_ct[9])
 
         lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")
         
