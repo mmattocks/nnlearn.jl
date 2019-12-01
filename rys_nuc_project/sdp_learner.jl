@@ -23,7 +23,7 @@ combined_ensemble = "/bench/PhD/NGS_binaries/nnlearn/combined_ensemble"
 
 #JOB CONSTANTS
 const position_size = 141
-const ensemble_size = 1000
+const ensemble_size = 500
 const no_sources = 8
 const source_min_bases = 3
 const source_max_bases = 10

@@ -35,7 +35,9 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     eff_iterates::Int64
     no_displayed_srcs::Int64
     sources::Vector{Tuple{Matrix{Float64},Int64}}
-    mix::BitMatrix  
+    mix::BitMatrix
+    job_times::Vector{Float64}
+    job_i1_ct::Vector{Int64}
 
     function ProgressNS{T}(    naive::Float64,
                                interval::T,
@@ -81,7 +83,9 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          eff_iterates,
          no_displayed_srcs,
          [(zeros(0,0),0)],
-         falses(0,0))
+         falses(0,0),
+         zeros(9),
+         zeros(Int64,9))
     end
 end
 
@@ -93,15 +97,15 @@ ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::Abstrac
 
 function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction; sources=[(zeros(0,0),0)], bitmatrix=falses(0,0), options...)
     
-    instruction == "PS" && (p.inst_counters[1]+=1)
-    instruction == "PM" && (p.inst_counters[2]+=1)
-    instruction == "PSFM" && (p.inst_counters[3]+=1)
-    instruction == "FM" && (p.inst_counters[4]+=1)
-    instruction == "DM" && (p.inst_counters[5]+=1)
-    instruction == "SM" && (p.inst_counters[6]+=1)
-    instruction == "RD" && (p.inst_counters[7]+=1)
-    instruction == "RI" && (p.inst_counters[8]+=1)
-    instruction == "EM" && (p.inst_counters[9]+=1)
+    instruction == "PS" && (p.inst_counters[1]+=1) && job==1 && (p.job_i1_ct[1]+=1) && (p.job_times[1]+=wk_time)
+    instruction == "PM" && (p.inst_counters[2]+=1) && job==1 && (p.job_i1_ct[2]+=1) && (p.job_times[2]+=wk_time)
+    instruction == "PSFM" && (p.inst_counters[3]+=1) && job==1 && (p.job_i1_ct[3]+=1) && (p.job_times[3]+=wk_time)
+    instruction == "FM" && (p.inst_counters[4]+=1) && job==1 && (p.job_i1_ct[4]+=1) && (p.job_times[4]+=wk_time)
+    instruction == "DM" && (p.inst_counters[5]+=1) && job==1 && (p.job_i1_ct[5]+=1) && (p.job_times[5]+=wk_time)
+    instruction == "SM" && (p.inst_counters[6]+=1) && job==1 && (p.job_i1_ct[6]+=1) && (p.job_times[6]+=wk_time)
+    instruction == "RD" && (p.inst_counters[7]+=1) && job==1 && (p.job_i1_ct[7]+=1) && (p.job_times[7]+=wk_time)
+    instruction == "RI" && (p.inst_counters[8]+=1) && job==1 && (p.job_i1_ct[8]+=1) && (p.job_times[8]+=wk_time)
+    instruction == "EM" && (p.inst_counters[9]+=1) && job==1 && (p.job_i1_ct[9]+=1) && (p.job_times[9]+=wk_time)
 
     p.counter += 1
     stps_elapsed=p.counter-p.start_it
@@ -185,6 +189,9 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
         wk_msgs = [@sprintf "Wk:%g:: I:%i, %s M:%i S:%.2f" p.workers[widx] p.wk_instruction[widx] p.wk_jobs[widx] p.model_exhaust[widx] (p.wk_totals[widx]/(p.counter-p.start_it)) for widx in 1:length(p.workers)]
         wk_inst=UnicodePlots.boxplot(wk_msgs, p.wk_eff, title="Worker Diagnostics", xlabel="Likelihood surface velocity (sec^-1)", color=:magenta)
 
+        jobtime_msg= @sprintf "PS:%s|PM:%s|PSFM:%s|FM:%s|DM:%s|SM:%s|RD:%s|RI:%s|EM:%s"
+        hmss(p.job_times[1]/p.job_i1_ct[1]) hmss(p.job_times[2]/p.job_i1_ct[2]) hmss(p.job_times[3]/p.job_i1_ct[3]) hmss(p.job_times[4]/p.job_i1_ct[4]) hmss(p.job_times[5]/p.job_i1_ct[5]) hmss(p.job_times[6]/p.job_i1_ct[6]) hmss(p.job_times[7]/p.job_i1_ct[7]) hmss(p.job_times[8]/p.job_i1_ct[8]) hmss(p.job_times[9]/p.job_i1_ct[9])
+
         lh_heatmap=UnicodePlots.heatmap(p.wk_li_delta[end:-1:1,:], xoffset=-size(p.wk_li_delta,2)-1, colormap=:viridis, title="Worker lhΔ history", xlabel="Lh stride/step")
         
         msg1 = @sprintf "%s Step %i::Wk:%g: PS:%s|PM:%s|PSFM:%s|FM:%s|DM:%s|SM:%s|RD:%s|RI:%s|EM:%s" p.desc p.counter p.stepworker p.inst_counters[1] p.inst_counters[2] p.inst_counters[3] p.inst_counters[4] p.inst_counters[5] p.inst_counters[6] p.inst_counters[7] p.inst_counters[8] p.inst_counters[9]
@@ -195,10 +202,12 @@ function updateProgress!(p::ProgressNS; showvalues = Any[], valuecolor = :blue, 
 
         #p.numprintedvalues=nrows(wk_inst.graphics)+nrows(hist.graphics)+nrows(lh_heatmap.graphics)+1
         srclines=p.no_displayed_srcs+1
-        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+17+srclines
+        p.numprintedvalues=nrows(wk_inst.graphics)+nrows(lh_heatmap.graphics)+nrows(hist.graphics)+18+srclines
         print(p.output, "\n" ^ (p.offset + p.numprintedvalues))
         ProgressMeter.move_cursor_up_while_clearing_lines(p.output, p.numprintedvalues)
         show(p.output, wk_inst)
+        print(p.output, "\n")
+        ProgressMeter.printover(p.output, jobtime_msg, :magenta)
         print(p.output, "\n")
         show(p.output, lh_heatmap)
         print(p.output, "\n")
