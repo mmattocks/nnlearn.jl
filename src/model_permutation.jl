@@ -54,7 +54,8 @@ end
 
 function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::RemoteChannel, models_chan::RemoteChannel, job_sets::Vector{Tuple{Vector{Tuple{String,Any}},Vector{Float64}}}, job_set_thresh::Vector{Float64}, job_limit::Int64, models_to_permute::Int64)
 	persist=true
-	id=myid()
+    id=myid()
+    model_ctr=1
 	while persist
         wait(job_chan)
 
@@ -95,9 +96,10 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
                 else
                     @error "Malformed permute mode code! Current supported: \"PS\", \"PM\", \"PSFM\", \"FM\", \"DM\", \"SM\",\"RD\", \"RI\", \"EM\""
                 end
-				new_m.log_Li > contour && (put!(models_chan, (new_m ,id, (time()-start, job, model, m.log_Li, new_m.log_Li, mode))); found=true; break)
+				new_m.log_Li > contour && (put!(models_chan, (new_m ,id, (time()-start, job, model_ctr, m.log_Li, new_m.log_Li, mode))); found=true; model_ctr=1; break)
 			end
             found==true && break;
+            model_ctr+=1
             wait(job_chan)
             fetch(job_chan)!=models && (break) #if the ensemble has changed during the search, update it
 			model==models_to_permute && (put!(models_chan,nothing);persist=false)#worker to put nothing on channel if it fails to find a model more likely than contour
