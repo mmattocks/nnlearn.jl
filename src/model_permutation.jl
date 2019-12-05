@@ -137,6 +137,7 @@ function permute_source(m::ICA_PWM_model, contour::Float64, observations::Matrix
     a, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
 
     while new_log_Li <= contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+        new_sources=deepcopy(m.sources);
         s = rand(1:S)
         clean=Vector{Bool}(trues(O))
         clean[m.mix_matrix[:,s]].=false #all obs with source are dirty
@@ -246,6 +247,7 @@ function random_decorrelate(m::ICA_PWM_model, contour::Float64, observations::Ma
     a, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true)
 
     while new_log_Li <= contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+        new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
         clean=Vector{Bool}(trues(O))
         s = rand(1:length(m.sources))
         clean[new_mix[:,s]].=false #all obs starting with source are dirty
@@ -272,6 +274,7 @@ function distance_merge(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model, 
     a, cache = IPM_likelihood(new_sources, observations, obs_lengths, bg_scores, new_mix, true, true)
 
     while new_log_Li <= contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+        new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
         clean=Vector{Bool}(trues(O))
 
         merger_m = deserialize(rand(models).path) #randomly select a model to merge
@@ -302,6 +305,7 @@ function distance_merge(librarian::Int64, models::Vector{nnlearn.Model_Record}, 
     a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
 
     while new_log_Li <= contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+        new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
         clean=Vector{Bool}(trues(O))
         merger_m = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge
         s = rand(1:S) #randomly select a source to merge
@@ -331,6 +335,7 @@ function similarity_merge(models::Vector{nnlearn.Model_Record}, m::ICA_PWM_model
     a, cache = IPM_likelihood(m.sources, observations, obs_lengths, bg_scores, m.mix_matrix, true, true)
 
     while new_log_Li <= contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+        new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
         clean=Vector{Bool}(trues(O))
 
         merger_m = deserialize(rand(models).path) #randomly select a model to merge
@@ -360,6 +365,7 @@ function similarity_merge(librarian::Int64, models::Vector{nnlearn.Model_Record}
     clean=Vector{Bool}(trues(O))
 
     while new_log_Li <= contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
+        new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
         clean=Vector{Bool}(trues(O))
 
         merger_m = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge

@@ -5,7 +5,7 @@ import StatsFuns: logsumexp
 
 @info "Beginning tests..."
 
-Random.seed!(1)
+Random.seed!(786)
 O=1000;S=50
 
 @testset "PWM source prior setup, PWM source initialisation and manipulation functions" begin
@@ -424,7 +424,7 @@ end
     @test ddm_model.log_Li > test_model.log_Li
     @test ddm_model.sources != test_model.sources
     @test ddm_model.mix_matrix != test_model.mix_matrix
-    @test "DM from test" in ddm_model.flags
+    @test ("DM from test" in ddm_model.flags) || ("FM from consolidate" in ddm_model.flags)
 
     dsm_model=nnlearn.similarity_merge(librarian[1], [test_record], rd_model, test_model.log_Li, obs, obsl, bg_scores, source_priors, 1000)
     @test dsm_model.log_Li > test_model.log_Li

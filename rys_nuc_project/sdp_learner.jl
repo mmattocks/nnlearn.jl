@@ -59,6 +59,28 @@ local_job_sets=[
     ("RI", (no_sources)),
     ("EM", (no_sources))
 ],[.15, .05, .05, .025, .025, .05, 0.15, 0.15, 0.15, 0.05, .15]),
+([
+    ("PS", (no_sources)),
+    ("PM", (no_sources)),
+    ("PSFM", (no_sources)),
+    ("PSFM", (no_sources, 0., 1.)),
+    ("PSFM", (no_sources, 0.8, .0)),
+    ("FM", ()),
+    ("DM", (no_sources)),
+    ("SM", (no_sources)),
+    ("RD", (no_sources)),
+    ("RI", (no_sources)),
+    ("EM", (no_sources))
+],[.15, .05, .05, .025, .025, .05, 0.15, 0.15, 0.15, 0.05, .15]),
+# ([
+#     ("PS", (no_sources)),
+#     ("PM", (no_sources)),
+#     ("PSFM", (no_sources,.2,.05)),
+#     ("DM", (no_sources)),
+#     ("SM", (no_sources)),
+#     ("RD", (no_sources)),
+#     ("EM", (no_sources))
+# ],[.10, .15, .15, 0.15, 0.15, 0.15, .15])
 ]
 remote_job_sets=[
 ([
@@ -82,6 +104,24 @@ remote_job_sets=[
     ("RI", (no_sources)),
     ("EM", (no_sources))
 ],[.20, .10, .10, .05, .05, .10, 0.15, 0.10, .15]),
+([
+    ("PS", (no_sources)),
+    ("PM", (no_sources)),
+    ("PSFM", (no_sources)),
+    ("PSFM", (no_sources, 0., 1.)),
+    ("PSFM", (no_sources, 0.8, .0)),
+    ("FM", ()),
+    ("RD", (no_sources)),
+    ("RI", (no_sources)),
+    ("EM", (no_sources))
+],[.20, .10, .10, .05, .05, .10, 0.15, 0.10, .15]),
+# ([
+#     ("PS", (no_sources)),
+#     ("PM", (no_sources)),
+#     ("PSFM", (no_sources,.2,.05)),
+#     ("RD", (no_sources)),
+#     ("EM", (no_sources))
+# ],[.20, .25, .25, 0.15, .15])
 ]
 job_limit=6
 const prior_wt=1.2
@@ -132,7 +172,7 @@ combined_source_priors = nnlearn.assemble_source_priors(no_sources, combined_pri
 isfile(string(sib_ensemble,'/',"ens")) ? (sib_e = deserialize(string(sib_ensemble,'/',"ens"))) :
     (sib_e = nnlearn.Bayes_IPM_ensemble(worker_pool, sib_ensemble, ensemble_size, sib_source_priors, (falses(0,0), mixing_prior), sib_matrix, sib_obs, source_length_range))
 
-job_set_thresh=[-Inf,sib_e.naive_lh]
+job_set_thresh=[-Inf,sib_e.naive_lh,sib_e.naive_lh+230000]
 remote_param_sets=[(remote_job_sets,job_set_thresh,job_limit) for i in 1:no_remote_procs]
 local_param_sets=[(local_job_sets,job_set_thresh,job_limit) for i in 1:no_local_procs]
 permute_params=vcat(remote_param_sets,local_param_sets)
@@ -145,7 +185,7 @@ serialize(string(sib_ensemble,'/',"ens"), sib_e)
 isfile(string(rys_ensemble,'/',"ens")) ? (rys_e = deserialize(string(rys_ensemble,'/',"ens"))) :
     (rys_e = nnlearn.Bayes_IPM_ensemble(worker_pool, rys_ensemble, ensemble_size, rys_source_priors, (falses(0,0), mixing_prior), rys_matrix, rys_obs, source_length_range))
 
-job_set_thresh=[-Inf,rys_e.naive_lh]
+job_set_thresh=[-Inf,rys_e.naive_lh,rys_e.naive_lh+230000]
 remote_param_sets=[(remote_job_sets,job_set_thresh,job_limit) for i in 1:no_remote_procs]
 local_param_sets=[(local_job_sets,job_set_thresh,job_limit) for i in 1:no_local_procs]
 permute_params=vcat(remote_param_sets,local_param_sets)
@@ -158,7 +198,7 @@ serialize(string(rys_ensemble,'/',"ens"), rys_e)
 isfile(string(combined_ensemble,'/',"ens")) ? (combined_e = deserialize(string(combined_ensemble,'/',"ens"))) :
     (combined_e = nnlearn.Bayes_IPM_ensemble(worker_pool, combined_ensemble, ensemble_size, combined_source_priors, (falses(0,0), mixing_prior), combined_matrix, combined_obs, source_length_range))
 
-job_set_thresh=[-Inf,combined_e.naive_lh]
+job_set_thresh=[-Inf,combined_e.naive_lh,combined_e.naive_lh+230000]
 remote_param_sets=[(remote_job_sets,job_set_thresh,job_limit) for i in 1:no_remote_procs]
 local_param_sets=[(local_job_sets,job_set_thresh,job_limit) for i in 1:no_local_procs]
 permute_params=vcat(remote_param_sets,local_param_sets)
