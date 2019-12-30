@@ -60,7 +60,7 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, worker_p
     #SELECT NEW MODEL, SAVE TO ENSEMBLE DIRECTORY, CREATE RECORD AND PUSH TO ENSEMBLE
     model_selected=false;wk=0;step_report=0
     while !model_selected
-        wait(model_chan)
+        @async wait(model_chan)
         model_tuple = take!(model_chan)
         if !(model_tuple===nothing)
             candidate,wk,step_report=model_tuple

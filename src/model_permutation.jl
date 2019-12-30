@@ -46,7 +46,7 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, job_sets::Vector{Tuple{V
                 @error "Malformed permute mode code! Current supported: \"PS\", \"PM\", \"PSFM\", \"FM\", \"DM\", \"SM\",\"RD\", \"RI\", \"EM\""
             end
 
-			new_m.log_Li > contour && return new_m, (time()-start, job, model, m.log_Li, new_m.log_Li, mode)
+			new_m!=m && new_m.log_Li > contour && return new_m, (time()-start, job, model, m.log_Li, new_m.log_Li, mode)
 		end
 	end
 	return nothing, nothing
@@ -71,7 +71,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
 		for model=1:models_to_permute
 			found::Bool=false
 			m_record = rand(models)
-			m = remotecall_fetch(deserialize,librarian,m_record.path)
+			m = remotecall_fetch(deserialize,1,m_record.path)
             for job in 1:job_limit
                 mode, params = get_job(job_set,job_weights,m.flags,m.sources,m.source_length_limits)
                 if mode == "PS"
@@ -96,7 +96,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
                 else
                     @error "Malformed permute mode code! Current supported: \"PS\", \"PM\", \"PSFM\", \"FM\", \"DM\", \"SM\",\"RD\", \"RI\", \"EM\""
                 end
-				new_m.log_Li > contour && (put!(models_chan, (new_m ,id, (time()-start, job, model_ctr, m.log_Li, new_m.log_Li, mode))); found=true; model_ctr=1; break)
+				new_m!=m && new_m.log_Li > contour && (put!(models_chan, (new_m ,id, (time()-start, job, model_ctr, m.log_Li, new_m.log_Li, mode))); found=true; model_ctr=1; break)
 			end
             found==true && break;
             model_ctr+=1
@@ -307,7 +307,7 @@ function distance_merge(librarian::Int64, models::Vector{nnlearn.Model_Record}, 
     while new_log_Li <= contour && iterate <= iterates #until we produce a model more likely than the lh contour or exceed iterates
         new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
         clean=Vector{Bool}(trues(O))
-        merger_m = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge
+        merger_m = remotecall_fetch(deserialize, 1, rand(models).path) #randomly select a model to merge
         s = rand(1:S) #randomly select a source to merge
         s > m.informed_sources ? #if the source is on an uninformative prior, the merger model source will be selected by mixvector dissimilarity
             merge_s=most_dissimilar(new_mix,merger_m.mix_matrix) : merge_s=s
@@ -368,7 +368,7 @@ function similarity_merge(librarian::Int64, models::Vector{nnlearn.Model_Record}
         new_sources=deepcopy(m.sources); new_mix=deepcopy(m.mix_matrix)
         clean=Vector{Bool}(trues(O))
 
-        merger_m = remotecall_fetch(deserialize, librarian, rand(models).path) #randomly select a model to merge
+        merger_m = remotecall_fetch(deserialize, 1, rand(models).path) #randomly select a model to merge
         s = rand(1:S) #randomly select a source in the model to merge
         s > m.informed_sources ? #if the source is on an uninformative prior, the merger model source will be selected by mixvector similarity
         merge_s=most_similar(m.mix_matrix[:,s],merger_m.mix_matrix) : merge_s=s

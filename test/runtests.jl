@@ -568,8 +568,8 @@ end
 
     @info "Testing multiprocess convergence..."
     @info "Spawning worker pool..."
-    librarians=addprocs(1)
-    worker_pool=addprocs(2)
+    librarians=addprocs(1, topology=:master_worker)
+    worker_pool=addprocs(2, topology=:master_worker)
     @everywhere using nnlearn,Random
     @everywhere Random.seed!(1)
     
