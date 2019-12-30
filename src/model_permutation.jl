@@ -46,7 +46,7 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, job_sets::Vector{Tuple{V
                 @error "Malformed permute mode code! Current supported: \"PS\", \"PM\", \"PSFM\", \"FM\", \"DM\", \"SM\",\"RD\", \"RI\", \"EM\""
             end
 
-			new_m!=m && new_m.log_Li > contour && return new_m, (time()-start, job, model, m.log_Li, new_m.log_Li, mode)
+			dupecheck(new_m,m) && new_m.log_Li > contour && return new_m, (time()-start, job, model, m.log_Li, new_m.log_Li, mode)
 		end
 	end
 	return nothing, nothing
@@ -96,7 +96,7 @@ function worker_permute(e::Bayes_IPM_ensemble, librarian::Int64, job_chan::Remot
                 else
                     @error "Malformed permute mode code! Current supported: \"PS\", \"PM\", \"PSFM\", \"FM\", \"DM\", \"SM\",\"RD\", \"RI\", \"EM\""
                 end
-				new_m!=m && new_m.log_Li > contour && (put!(models_chan, (new_m ,id, (time()-start, job, model_ctr, m.log_Li, new_m.log_Li, mode))); found=true; model_ctr=1; break)
+				dupecheck(new_m,m) && new_m.log_Li > contour && (put!(models_chan, (new_m ,id, (time()-start, job, model_ctr, m.log_Li, new_m.log_Li, mode))); found=true; model_ctr=1; break)
 			end
             found==true && break;
             model_ctr+=1
@@ -123,6 +123,10 @@ end
                         end
                     end
                     return mode,params
+                end
+
+                function dupecheck(new_model, model)
+                    (new_model.sources==model.sources && new_model.mix_matrix==model.mix_matrix) ? (return false) : (return true)
                 end
 
 #DECORRELATION SEARCH PATTERNS

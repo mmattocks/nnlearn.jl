@@ -133,9 +133,8 @@ using Distributed, Serialization
 no_local_procs=2
 no_remote_procs=2
 remote_machine = "10.0.0.3"
-remote_pool=addprocs([(remote_machine, no_remote_procs)], tunnel=true)
-librarians=addprocs(2)
-local_pool=addprocs(no_local_procs)
+remote_pool=addprocs([(remote_machine, no_remote_procs)], tunnel=true, topology=:master_worker)
+local_pool=addprocs(no_local_procs, topology=:master_worker)
 worker_pool=vcat(remote_pool,local_pool)
 
 @info "Loading libraries everywhere..."
@@ -178,7 +177,7 @@ local_param_sets=[(local_job_sets,job_set_thresh,job_limit) for i in 1:no_local_
 permute_params=vcat(remote_param_sets,local_param_sets)
 
 @info "Learning differential sib motifs by nested sampling of posterior..."
-nnlearn.ns_converge!(sib_e, permute_params, models_to_permute, librarians, worker_pool, model_display=8, backup=(true,5))
+nnlearn.ns_converge!(sib_e, permute_params, models_to_permute, [1], worker_pool, model_display=8, backup=(true,5))
 serialize(string(sib_ensemble,'/',"ens"), sib_e)
 
 @info "Initialising rys ICA PWM model ensemble for nested sampling..."
@@ -191,7 +190,7 @@ local_param_sets=[(local_job_sets,job_set_thresh,job_limit) for i in 1:no_local_
 permute_params=vcat(remote_param_sets,local_param_sets)
 
 @info "Learning differential rys motifs by nested sampling of posterior..."
-nnlearn.ns_converge!(rys_e, permute_params, models_to_permute, librarians, worker_pool, model_display=8, backup=(true,5))
+nnlearn.ns_converge!(rys_e, permute_params, models_to_permute, [1], worker_pool, model_display=8, backup=(true,5))
 serialize(string(rys_ensemble,'/',"ens"), rys_e)
 
 @info "Initialising combined ICA PWM model ensemble for nested sampling..."
@@ -204,7 +203,7 @@ local_param_sets=[(local_job_sets,job_set_thresh,job_limit) for i in 1:no_local_
 permute_params=vcat(remote_param_sets,local_param_sets)
     
 @info "Learning combined motifs by nested sampling of posterior..."
-nnlearn.ns_converge!(combined_e, permute_params, models_to_permute, librarians, worker_pool, model_display=8, backup=(true,5))
+nnlearn.ns_converge!(combined_e, permute_params, models_to_permute, [1], worker_pool, model_display=8, backup=(true,5))
 serialize(string(combined_ensemble,'/',"ens"), combined_e)
 
 rm(worker_pool)
