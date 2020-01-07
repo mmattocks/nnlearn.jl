@@ -120,6 +120,8 @@ module nnlearn
     include("model_display.jl")
     include("ns_progressmeter.jl")
     include("ensemble_utils.jl")
-    include("model_permutation.jl")
+    include("permute_control.jl")
+    include("permute_instructions.jl")
+
     #include("performance.jl")
 end # module
