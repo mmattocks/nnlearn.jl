@@ -122,7 +122,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 end
 
     
-function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, librarians::Vector{Int64}, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, writer::Int64, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
 
@@ -135,8 +135,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, l
     @assert length(param_sets)==length(worker_pool) "Each worker must have a parameter set!"
 
     for (x,worker) in enumerate(worker_pool)
-        librarian = librarians[Int(ceil(x*(length(librarians)/length(worker_pool))))]
-        remote_do(worker_permute, worker, e, librarian, job_chan, model_chan, param_sets[x]..., permute_limit)
+        remote_do(worker_permute, worker, e, job_chan, model_chan, param_sets[x]..., permute_limit)
     end
 
     iterate = length(e.log_Li) #get the iterate from the ensemble 
@@ -153,7 +152,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, l
 
         backup[1] && iterate%backup[2] == 0 && serialize(string(e.path,'/',"ens"), e) #every backup interval, serialise the ensemble
 
-        e_update_progress(e,meter,log_frac,wk,step_report,model_display)        
+        remote_do(e_update_progress, writer, e, meter, log_frac, wk, step_report, model_display)
     end
 
     take!(job_chan); put!(job_chan, nothing)
