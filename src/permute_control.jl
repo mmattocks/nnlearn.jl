@@ -15,7 +15,7 @@
 function run_permutation_routine(e::Bayes_IPM_ensemble, job_sets::Vector{Tuple{Vector{Tuple{String,Any}},Vector{Float64}}}, job_set_thresh::Vector{Float64}, job_limit::Int64, models_to_permute::Int64, contour::Float64)
     start=time()
     job_set,job_weights=job_sets[findlast(thresh->(contour>thresh),job_set_thresh)]
-    !(length(job_weights)==length(job_set)) && throw(DomainError("Job set and job weight vec must be same length!"))
+    !(length(job_weights)==length(job_set)) && throw(ArgumentError("Job set and job weight vec must be same length!"))
 
 	for model = 1:models_to_permute
 		m_record = rand(e.models)
@@ -66,7 +66,7 @@ function worker_permute(e::Bayes_IPM_ensemble, job_chan::RemoteChannel, models_c
 		contour, ll_idx = findmin([model.log_Li for model in models])
 		deleteat!(models, ll_idx)
         job_set,job_weights=job_sets[findlast(thresh->(contour>thresh),job_set_thresh)]
-        !(length(job_weights)==length(job_set)) && throw(DomainError,"Job set and job weight vec must be same length!")
+        !(length(job_weights)==length(job_set)) && throw(ArgumentError,"Job set and job weight vec must be same length!")
 
 		for model=1:models_to_permute
 			found::Bool=false

@@ -418,7 +418,7 @@ end
                         end
                     end
                     new_wm = new_wm ./ sum(new_wm) #renormalise to sum 1 - necessary in case of clamping at 0 or 1
-                    !isprobvec(new_wm) && throw(DomainError("Bad weight vector generated in wm_shift! $new_wm")) #throw assertion exception if the position WM is invalid
+                    !isprobvec(new_wm) && throw(DomainError(new_wm, "Bad weight vector generated in wm_shift!")) #throw assertion exception if the position WM is invalid
                     return new_wm
                 end
 
@@ -440,7 +440,7 @@ function permute_source_length(source::Tuple{Matrix{Float64},Int64}, prior::Vect
             prior_position<1 || prior_position>length(prior) ? 
                 ins_WM[pos,:] = log.(transpose(rand(uninformative))) :
                 ins_WM[pos,:] = log.(transpose(rand(prior[prior_position])))
-                !isprobvec(exp.(ins_WM[pos,:])) && throw(DomainError("Bad weight vector generated in permute_source_length! $ins_WM"))
+                !isprobvec(exp.(ins_WM[pos,:])) && throw(DomainError(ins_WM, "Bad weight vector generated in permute_source_length!"))
         end
         upstream_source=source_PWM[1:permute_pos-1,:]
         downstream_source=source_PWM[permute_pos:end,:]
@@ -488,7 +488,7 @@ end
         infovec=zeros(wml)
         for pos in 1:wml
             logsw ? wvec=deepcopy(exp.(pwm[pos,:])) : wvec=deepcopy(pwm[pos,:])
-            !isprobvec(wvec) && throw(DomainError("Bad wvec in get_pwm_info $wvec -Original sources must be in logspace!!"))
+            !isprobvec(wvec) && throw(DomainError(wvec, "Bad wvec in get_pwm_info -Original sources must be in logspace!!"))
             wvec.+=10^-99
             infscore = (2.0 + sum([x*log(2,x) for x in wvec]))
             infovec[pos]=infscore
@@ -499,7 +499,7 @@ end
     function get_erosion_idxs(infovec::Vector{Float64}, info_thresh::Float64, length_limits::UnitRange{Int64})
         srcl=length(infovec)
         contractable =  srcl-length_limits[1]
-        contractable <=0 && throw(DomainError("erode_source passed a source at its lower length limit!"))
+        contractable <=0 && throw(DomainError(contractable, "erode_source passed a source at its lower length limit!"))
         centeridx=findmax(infovec)[2]
         
         start_idx=findprev(info-><(info,info_thresh),infovec,centeridx)
