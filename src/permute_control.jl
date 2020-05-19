@@ -12,7 +12,7 @@
 #						merge (iteratively copy a source + mix matrix row from another model in the ensemble until lh>contour or iterate						limit reached)
 #						-(iterates) for merpge params
 
-function run_permutation_routine(e::Bayes_IPM_ensemble, job_sets::Vector{Tuple{Vector{Tuple{String,Any}},Vector{Float64}}}, job_set_thresh::Vector{Float64}, job_limit::Int64, models_to_permute::Int64, contour::Float64)
+function run_permutation_routine(e::Bayes_IPM_ensemble, job_sets::Vector{Tuple{Vector{Tuple{String,Any}},Vector{AbstractFloat}}}, job_set_thresh::Vector{AbstractFloat}, job_limit::Integer, models_to_permute::Integer, contour::AbstractFloat)
     start=time()
     job_set,job_weights=job_sets[findlast(thresh->(contour>thresh),job_set_thresh)]
     !(length(job_weights)==length(job_set)) && throw(ArgumentError("Job set and job weight vec must be same length!"))
@@ -52,7 +52,7 @@ function run_permutation_routine(e::Bayes_IPM_ensemble, job_sets::Vector{Tuple{V
 	return nothing, nothing
 end
 
-function worker_permute(e::Bayes_IPM_ensemble, job_chan::RemoteChannel, models_chan::RemoteChannel, job_sets::Vector{Tuple{Vector{Tuple{String,Any}},Vector{Float64}}}, job_set_thresh::Vector{Float64}, job_limit::Int64, models_to_permute::Int64)
+function worker_permute(e::Bayes_IPM_ensemble, job_chan::RemoteChannel, models_chan::RemoteChannel, job_sets::Vector{Tuple{Vector{Tuple{String,Any}},Vector{AbstractFloat}}}, job_set_thresh::Vector{AbstractFloat}, job_limit::Integer, models_to_permute::Integer)
 	persist=true
     id=myid()
     model_ctr=1

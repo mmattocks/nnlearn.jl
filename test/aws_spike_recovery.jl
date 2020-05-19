@@ -73,16 +73,16 @@ const prior_wt=1.1
 
 #FUNCTIONS
 function setup_obs(hmm, no_obs, obsl)
-    obs=vec(Int64.(rand(hmm,obsl)[2]))
+    obs=vec(UInt8.(rand(hmm,obsl)[2]))
     for o in 2:no_obs
-        obs=hcat(obs, vec(Int64.(rand(hmm,obsl)[2])))
+        obs=hcat(obs, vec(UInt8.(rand(hmm,obsl)[2])))
     end
-    obs=vcat(obs,zeros(Int64,1,no_obs))
+    obs=vcat(obs,zeros(UInt8,1,no_obs))
     return obs
 end
 
 function spike_irreg!(obs, source, frac_obs, recur)
-    truth=Vector{Int64}()
+    truth=Vector{UInt8}()
     for o in 1:size(obs,2)
         if rand()<frac_obs
             push!(truth, o)
@@ -102,14 +102,14 @@ function spike_irreg!(obs, source, frac_obs, recur)
 end
 
 function spike_struc!(obs, source, frac_obs, periodicity)
-    truth=Vector{Int64}()
-    truthpos=Vector{Vector{Int64}}()
+    truth=Vector{UInt8}()
+    truthpos=Vector{Vector{UInt8}}()
     for o in 1:size(obs,2)
         if rand()<frac_obs
             push!(truth, o)
             rand()<.5 && (source=nnlearn.revcomp_pwm(source))
             pos=rand(1:periodicity)
-            posvec=Vector{Int64}()
+            posvec=Vector{UInt8}()
             while pos<=size(obs,1)
                 pos_ctr=pos
                 pwm_ctr=1
@@ -131,7 +131,7 @@ end
 function get_BGHMM_lhs(obs,hmm)
     lh_mat=zeros(size(obs,1)-1,size(obs,2))
     for o in 1:size(obs,2)
-        obso=zeros(Int64,size(obs,1),1)
+        obso=zeros(UInt8,size(obs,1),1)
         obso[1:end,1] = obs[:,o]
         lh_mat[:,o]=BGHMM.get_BGHMM_symbol_lh(Matrix(transpose(obso)),hmm)
     end

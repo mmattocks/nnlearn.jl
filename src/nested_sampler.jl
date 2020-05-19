@@ -1,5 +1,5 @@
 #### IMPLEMENTATION OF JEFF SKILLINGS' NESTED SAMPLING ALGORITHM ####
-function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64)
+function nested_step!(e::Bayes_IPM_ensemble, param_set, permute_limit::Integer)
     N = length(e.models) #number of sample models/particles on the posterior surface
     i = length(e.log_Li) #iterate number, index for last values
     j = i+1 #index for newly pushed values
@@ -95,12 +95,12 @@ function nested_step!(e::Bayes_IPM_ensemble, model_chan::RemoteChannel, worker_p
     return 0, wk, step_report
 end
 
-function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, evidence_fraction::Float64=.001; model_display=1, backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Integer, evidence_fraction::AbstractFloat=.001; model_display=1, backup::Tuple{Bool,Integer}=(false,0), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
     
     iterate = length(e.log_Li) #get the iterate from the enemble 
-    meter = ProgressNS(e.naive_lh, typemax(Float64), [1], "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
+    meter = ProgressNS(e.naive_lh, typemax(typeof(e.naive_lh)), [1], "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
 
     while lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the enemble 
@@ -122,11 +122,11 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_set, permute_limit::Int64, ev
 end
 
     
-function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, writer::Int64, worker_pool::Vector{Int64}, evidence_fraction::Float64=.001; model_display::Int64=1, backup::Tuple{Bool,Int64}=(false,0), verbose::Bool=false)
+function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Integer, writer::Integer, worker_pool::Vector{Integer}, evidence_fraction::AbstractFloat=.001; model_display::Integer=1, backup::Tuple{Bool,Integer}=(false,0), verbose::Bool=false)
     N = length(e.models)
     log_frac=log(evidence_fraction)
 
-    model_chan= RemoteChannel(()->Channel{Union{Tuple{ICA_PWM_model,Int64, Tuple},Nothing}}(length(worker_pool))) #channel to take EM iterates off of
+    model_chan= RemoteChannel(()->Channel{Union{Tuple{ICA_PWM_model,Integer, Tuple},Nothing}}(length(worker_pool))) #channel to take EM iterates off of
     job_chan = RemoteChannel(()->Channel{Union{Vector{Model_Record},Nothing}}(1))
     put!(job_chan,e.models)
 
@@ -139,7 +139,7 @@ function ns_converge!(e::Bayes_IPM_ensemble, param_sets, permute_limit::Int64, w
     end
 
     iterate = length(e.log_Li) #get the iterate from the ensemble 
-    meter = ProgressNS(e.naive_lh, typemax(Float64), worker_pool, "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
+    meter = ProgressNS(e.naive_lh, typemax(AbstractFloat), worker_pool, "Nested Sampling::", 0, iterate, no_displayed_srcs=model_display)
 
     while lps(findmax([model.log_Li for model in e.models])[1],  e.log_Xi[end]) >= lps(log_frac,e.log_Zi[end])
         iterate = length(e.log_Li) #get the iterate from the ensemble 

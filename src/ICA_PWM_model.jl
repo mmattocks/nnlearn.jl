@@ -1,18 +1,18 @@
 struct ICA_PWM_model
     name::String #designator for saving model to posterior
-    sources::Vector{Tuple{Matrix{Float64},Int64}} #vector of PWM signal sources (LOG PROBABILITY!!!) tupled with an index denoting the position of the first PWM base on the prior matrix- allows us to permute length and redraw from the appropriate prior position
-    informed_sources::Int64 #number of sources with informative priors- these are not subject to frequency sorting in model mergers
-    source_length_limits::UnitRange{Int64} #min/max source lengths for init and permutation
+    sources::Vector{Tuple{Matrix{AbstractFloat},Integer}} #vector of PWM signal sources (LOG PROBABILITY!!!) tupled with an index denoting the position of the first PWM base on the prior matrix- allows us to permute length and redraw from the appropriate prior position
+    informed_sources::Integer #number of sources with informative priors- these are not subject to frequency sorting in model mergers
+    source_length_limits::UnitRange{Integer} #min/max source lengths for init and permutation
     mix_matrix::BitMatrix # obs x sources bool matrix
-    log_Li::Float64
+    log_Li::AbstractFloat
     flags::Vector{String} #optional flags for search patterns
 end
 
 #ICA_PWM_model FUNCTIONS
-ICA_PWM_model(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, observations::AbstractArray{Int64}, source_length_limits::UnitRange{Int64}) = init_IPM(name, source_priors,mix_prior,bg_scores,observations,source_length_limits)
+ICA_PWM_model(name::String, source_priors::Vector{Vector{Dirichlet{AbstractFloat}}}, mix_prior::Tuple{BitMatrix,AbstractFloat}, bg_scores::AbstractArray{AbstractFloat}, observations::AbstractArray{Integer}, source_length_limits::UnitRange{Integer}) = init_IPM(name, source_priors,mix_prior,bg_scores,observations,source_length_limits)
 
 #MODEL INIT
-function init_IPM(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, observations::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
+function init_IPM(name::String, source_priors::Vector{Vector{Dirichlet{AbstractFloat}}}, mix_prior::Tuple{BitMatrix,AbstractFloat}, bg_scores::AbstractArray{AbstractFloat}, observations::AbstractArray{Integer}, source_length_limits::UnitRange{Integer})
     T,O = size(observations)
     S=length(source_priors)
     obs_lengths=[findfirst(iszero,observations[:,o])-1 for o in 1:size(observations)[2]]
@@ -24,8 +24,8 @@ function init_IPM(name::String, source_priors::Vector{Vector{Dirichlet{Float64}}
 end
 
                 #init_IPM SUBFUNCS
-                function init_logPWM_sources(prior_vector::Vector{Vector{Dirichlet{Float64}}}, source_length_limits::UnitRange{Int64})
-                    srcvec = Vector{Tuple{Matrix{Float64},Int64}}()
+                function init_logPWM_sources(prior_vector::Vector{Vector{Dirichlet{AbstractFloat}}}, source_length_limits::UnitRange{Integer})
+                    srcvec = Vector{Tuple{Matrix{AbstractFloat},Integer}}()
                     prior_coord = 1
                         for (p, prior) in enumerate(prior_vector)
                             min_PWM_length=source_length_limits[1]
@@ -44,7 +44,7 @@ end
                     return srcvec
                 end
 
-                function init_mix_matrix(mix_prior::Tuple{BitMatrix,Float64}, no_observations::Int64, no_sources::Int64)
+                function init_mix_matrix(mix_prior::Tuple{BitMatrix,AbstractFloat}, no_observations::Integer, no_sources::Integer)
                     inform,uninform=mix_prior
                     if size(inform,2) > 0
                         @assert size(inform,1)==no_observations && size(inform,2)<=no_sources "Bad informative mix prior dimensions!"
@@ -61,10 +61,10 @@ end
                 end
 
 #LIKELIHOOD SCORING FUNCS
-function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observations::Matrix{Int64}, obs_lengths::Vector{Int64}, bg_scores::AbstractArray{Float64}, mix::BitMatrix, revcomp::Bool=true, returncache::Bool=false, cache::Vector{Float64}=zeros(0), clean::Vector{Bool}=Vector(falses(size(observations)[2])))
+function IPM_likelihood(sources::Vector{Tuple{Matrix{AbstractFloat},Integer}}, observations::Matrix{Integer}, obs_lengths::Vector{Integer}, bg_scores::AbstractArray{AbstractFloat}, mix::BitMatrix, revcomp::Bool=true, returncache::Bool=false, cache::Vector{AbstractFloat}=zeros(0), clean::Vector{Bool}=Vector(falses(size(observations)[2])))
     source_wmls=[size(source[1])[1] for source in sources]
     O = size(bg_scores)[2]
-    obs_lhs=Vector{Vector{Float64}}()
+    obs_lhs=Vector{Vector{AbstractFloat}}()
     nt=Threads.nthreads()
     for t in 1:nt-1
         push!(obs_lhs,zeros(Int(floor(O/nt))))
@@ -101,8 +101,8 @@ function IPM_likelihood(sources::Vector{Tuple{Matrix{Float64},Int64}}, observati
     returncache ? (return lps([lps(obs_lhs[t]) for t in 1:nt]), vcat(obs_lhs...)) : (return lps([lps(obs_lhs[t]) for t in 1:nt]))
 end
 
-                function score_obs_sources(sources::Vector{Tuple{Matrix{Float64},Int64}}, observation::Vector{Int64}, obsl::Int64, source_wmls::Vector{Int64}; revcomp=true) 
-                    scores=Vector{Matrix{Float64}}(undef, length(sources))
+                function score_obs_sources(sources::Vector{Tuple{Matrix{AbstractFloat},Integer}}, observation::Vector{Integer}, obsl::Integer, source_wmls::Vector{Integer}; revcomp=true) 
+                    scores=Vector{Matrix{AbstractFloat}}(undef, length(sources))
 
                     for (s,source) in enumerate(sources)
                         pwm = source[1] #get the PWM from the source tuple
@@ -115,7 +115,7 @@ end
                     return scores
                 end
 
-                function score_source(observation::AbstractArray{Int64,1}, source::Matrix{Float64}, source_stop::Int64, revcomp::Bool=true)
+                function score_source(observation::AbstractArray{Integer,1}, source::Matrix{AbstractFloat}, source_stop::Integer, revcomp::Bool=true)
                     revcomp ? (revsource = revcomp_pwm(source); score_matrix = zeros(source_stop,2)) : score_matrix = zeros(source_stop)
                     forward_score = 0.0
                     revcomp && (reverse_score = 0.0)
@@ -136,15 +136,15 @@ end
                     
                     return score_matrix
                 end
-                                function revcomp_pwm(pwm::Matrix{Float64}) #in order to find a motif on the reverse strand, we scan the forward strand with the reverse complement of the pwm, reordered 3' to 5', so that eg. an PWM for an ATG motif would become one for a CAT motif
+                                function revcomp_pwm(pwm::Matrix{AbstractFloat}) #in order to find a motif on the reverse strand, we scan the forward strand with the reverse complement of the pwm, reordered 3' to 5', so that eg. an PWM for an ATG motif would become one for a CAT motif
                                     return pwm[end:-1:1,end:-1:1]
                                 end
 
 
-                function weave_scores(obsl::Int64, bg_scores::SubArray, score_mat::Vector{Matrix{Float64}}, obs_source_indices::Vector{Int64}, source_wmls::Vector{Int64}, log_motif_expectation::Float64, cardinality_penalty::Float64,  revcomp::Bool=true)
+                function weave_scores(obsl::Integer, bg_scores::SubArray, score_mat::Vector{Matrix{AbstractFloat}}, obs_source_indices::Vector{Integer}, source_wmls::Vector{Integer}, log_motif_expectation::AbstractFloat, cardinality_penalty::AbstractFloat,  revcomp::Bool=true)
                     L=obsl+1
                     lh_vec = zeros(L)#likelihood vector is one position (0 initialiser) longer than the observation
-                    osi_emitting = Vector{Int64}()
+                    osi_emitting = Vector{Integer}()
                 
                     @inbounds for i in 2:L #i=1 is ithe lh_vec initializing 0, i=2 is the score of the first background position (ie t=1)
                         t=i-1

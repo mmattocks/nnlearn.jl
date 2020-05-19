@@ -2,31 +2,31 @@ mutable struct Bayes_IPM_ensemble
 	path::String #ensemble models and popped-out posterior samples serialised here
 	models::Vector{Model_Record} #ensemble keeps paths to serialised models and their likelihood tuples rather than keeping the models in memory
 
-	log_Li::Vector{Float64} #likelihood of lowest-ranked model at iterate i
-	log_Xi::Vector{Float64} #amt of prior mass included in ensemble contour at Li
-	log_wi::Vector{Float64} #width of prior mass covered in this iterate
-	log_Liwi::Vector{Float64} #evidentiary weight of the iterate
-	log_Zi::Vector{Float64} #ensemble evidence
-	Hi::Vector{Float64} #ensemble information
+	log_Li::Vector{AbstractFloat} #likelihood of lowest-ranked model at iterate i
+	log_Xi::Vector{AbstractFloat} #amt of prior mass included in ensemble contour at Li
+	log_wi::Vector{AbstractFloat} #width of prior mass covered in this iterate
+	log_Liwi::Vector{AbstractFloat} #evidentiary weight of the iterate
+	log_Zi::Vector{AbstractFloat} #ensemble evidence
+	Hi::Vector{AbstractFloat} #ensemble information
 
-	obs_array::Matrix{Int64} #observations
-	obs_lengths::Vector{Int64}
+	obs_array::Matrix{Integer} #observations
+	obs_lengths::Vector{Integer}
 
-	source_priors::Vector{Vector{Dirichlet{Float64}}} #source pwm priors
-	mix_prior::Tuple{BitMatrix,Float64} #prior on %age of observations that any given source contributes to
+	source_priors::Vector{Vector{Dirichlet{AbstractFloat}}} #source pwm priors
+	mix_prior::Tuple{BitMatrix,AbstractFloat} #prior on %age of observations that any given source contributes to
 
-	bg_scores::Matrix{Float64} #precalculated background HMM scores
+	bg_scores::Matrix{AbstractFloat} #precalculated background HMM scores
 
 	sample_posterior::Bool
 	retained_posterior_samples::Vector{Model_Record} #list of posterior sample records
 
-	model_counter::Int64
+	model_counter::Integer
 
-	naive_lh::Float64 #the likelihood of the background model without any sources
+	naive_lh::AbstractFloat #the likelihood of the background model without any sources
 end
 
 ####Bayes_IPM_ensemble FUNCTIONS
-Bayes_IPM_ensemble(path::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::Matrix{Float64}, obs::Array{Int64}, source_length_limits; posterior_switch::Bool=true) =
+Bayes_IPM_ensemble(path::String, no_models::Integer, source_priors::Vector{Vector{Dirichlet{AbstractFloat}}}, mix_prior::Tuple{BitMatrix,AbstractFloat}, bg_scores::Matrix{AbstractFloat}, obs::Array{Integer}, source_length_limits; posterior_switch::Bool=true) =
 Bayes_IPM_ensemble(
 	path,
 	assemble_IPMs(path, no_models, source_priors, mix_prior, bg_scores, obs, source_length_limits),
@@ -46,7 +46,7 @@ Bayes_IPM_ensemble(
 	no_models+1,
 	IPM_likelihood(init_logPWM_sources(source_priors, source_length_limits), obs, [findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]], bg_scores, falses(size(obs)[2],length(source_priors))))
 
-Bayes_IPM_ensemble(worker_pool::Vector{Int64}, path::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::Matrix{Float64}, obs::Array{Int64}, source_length_limits; posterior_switch::Bool=true) =
+Bayes_IPM_ensemble(worker_pool::Vector{Integer}, path::String, no_models::Integer, source_priors::Vector{Vector{Dirichlet{AbstractFloat}}}, mix_prior::Tuple{BitMatrix,AbstractFloat}, bg_scores::Matrix{AbstractFloat}, obs::Array{Integer}, source_length_limits; posterior_switch::Bool=true) =
 Bayes_IPM_ensemble(
 	path,
 	distributed_IPM_assembly(worker_pool, path, no_models, source_priors, mix_prior, bg_scores, obs, source_length_limits),
@@ -66,7 +66,7 @@ Bayes_IPM_ensemble(
 	no_models+1,
 	IPM_likelihood(init_logPWM_sources(source_priors, source_length_limits), obs, [findfirst(iszero,obs[:,o])-1 for o in 1:size(obs)[2]], bg_scores, falses(size(obs)[2],length(source_priors))))
 
-function assemble_IPMs(path::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
+function assemble_IPMs(path::String, no_models::Integer, source_priors::Vector{Vector{Dirichlet{AbstractFloat}}}, mix_prior::Tuple{BitMatrix,AbstractFloat}, bg_scores::AbstractArray{AbstractFloat}, obs::AbstractArray{Integer}, source_length_limits::UnitRange{Integer})
 	ensemble_records = Vector{Model_Record}()
 	!isdir(path) && mkpath(path)
 
@@ -87,7 +87,7 @@ function assemble_IPMs(path::String, no_models::Int64, source_priors::Vector{Vec
 	return ensemble_records
 end
 
-function distributed_IPM_assembly(worker_pool::Vector{Int64}, path::String, no_models::Int64, source_priors::Vector{Vector{Dirichlet{Float64}}}, mix_prior::Tuple{BitMatrix,Float64}, bg_scores::AbstractArray{Float64}, obs::AbstractArray{Int64}, source_length_limits::UnitRange{Int64})
+function distributed_IPM_assembly(worker_pool::Vector{Integer}, path::String, no_models::Integer, source_priors::Vector{Vector{Dirichlet{AbstractFloat}}}, mix_prior::Tuple{BitMatrix,AbstractFloat}, bg_scores::AbstractArray{AbstractFloat}, obs::AbstractArray{Integer}, source_length_limits::UnitRange{Integer})
 	ensemble_records = Vector{Model_Record}()
 	!isdir(path) && mkpath(path)
 
@@ -120,7 +120,7 @@ function distributed_IPM_assembly(worker_pool::Vector{Int64}, path::String, no_m
 
 	return ensemble_records
 end
-				function check_assembly!(ensemble_records::Vector{Model_Record}, path::String, no_models::Int64, assembly_progress::Progress)
+				function check_assembly!(ensemble_records::Vector{Model_Record}, path::String, no_models::Integer, assembly_progress::Progress)
 					counter=1
 					while counter <= no_models
 						model_path=string(path,'/',counter)

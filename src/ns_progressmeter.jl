@@ -1,55 +1,55 @@
 #UTILITY PROGRESSMETER, REPORTS WORKER NUMBER AND CURRENT ITERATE
 mutable struct ProgressNS{T<:Real} <: AbstractProgress
     interval::T
-    dt::Float64
+    dt::AbstractFloat
     start_it::Int
     counter::Int
     triggered::Bool
-    tfirst::Float64
-    tlast::Float64
-    tstp::Float64
+    tfirst::AbstractFloat
+    tlast::AbstractFloat
+    tstp::AbstractFloat
     printed::Bool        # true if we have issued at least one status update
     desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
     numprintedvalues::Int   # num values printed below progress in last iteration
     offset::Int             # position offset of progress bar (default is 0)
-    total_step::Float64
-    information::Float64
-    etc::Float64
-    contour::Float64
-    max_lh::Float64
-    naive::Float64
-    li_dist::Vector{Float64}
-    stepworker::Int64
-    workers::Vector{Int64}
-    wk_totals::Vector{Int64}
-    total_li_delta::Vector{Float64}
-    wk_li_delta::Matrix{Float64}
-    wk_instruction::Vector{Int64}
-    model_exhaust::Vector{Int64}
-    wk_eff::Vector{Vector{Float64}}
+    total_step::AbstractFloat
+    information::AbstractFloat
+    etc::AbstractFloat
+    contour::AbstractFloat
+    max_lh::AbstractFloat
+    naive::AbstractFloat
+    li_dist::Vector{AbstractFloat}
+    stepworker::Integer
+    workers::Vector{Integer}
+    wk_totals::Vector{Integer}
+    total_li_delta::Vector{AbstractFloat}
+    wk_li_delta::Matrix{AbstractFloat}
+    wk_instruction::Vector{Integer}
+    model_exhaust::Vector{Integer}
+    wk_eff::Vector{Vector{AbstractFloat}}
     wk_jobs::Vector{String}
-    inst_counters::Vector{Int64}
-    mean_stp_time::Float64
-    eff_iterates::Int64
-    no_displayed_srcs::Int64
-    sources::Vector{Tuple{Matrix{Float64},Int64}}
+    inst_counters::Vector{Integer}
+    mean_stp_time::AbstractFloat
+    eff_iterates::Integer
+    no_displayed_srcs::Integer
+    sources::Vector{Tuple{Matrix{AbstractFloat},Integer}}
     mix::BitMatrix
-    job_times::Vector{Float64}
-    job_i1_ct::Vector{Int64}
+    job_times::Vector{AbstractFloat}
+    job_i1_ct::Vector{Integer}
 
-    function ProgressNS{T}(    naive::Float64,
+    function ProgressNS{T}(    naive::AbstractFloat,
                                interval::T,
-                               workers::Vector{Int64};
+                               workers::Vector{Integer};
                                dt::Real=0.1,
-                               eff_iterates::Int64,
+                               eff_iterates::Integer,
                                desc::AbstractString="Nested Sampling::",
                                color::Symbol=:green,
                                output::IO=stderr,
                                offset::Int=0,
                                start_it::Int=1,
-                               no_displayed_srcs::Int64=0) where T
+                               no_displayed_srcs::Integer=0) where T
         tfirst = tlast = time()
         printed = false
         new{T}(interval,
@@ -71,29 +71,29 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
          [0.],
          0,
          workers,
-         zeros(Int64,length(workers)),
+         zeros(Integer,length(workers)),
          zeros(length(workers)),
          zeros(length(workers), 65),
-         zeros(Int64,length(workers)),
-         zeros(Int64,length(workers)),
+         zeros(Integer,length(workers)),
+         zeros(Integer,length(workers)),
          [[0.] for i in 1:length(workers)],
          ["none" for worker in 1:length(workers)],
-         zeros(Int64,9),
+         zeros(Integer,9),
          0.,
          eff_iterates,
          no_displayed_srcs,
          [(zeros(0,0),0)],
          falses(0,0),
          zeros(9),
-         zeros(Int64,9))
+         zeros(Integer,9))
     end
 end
 
-ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, dt::Real=0.1, desc::AbstractString="Nested Sampling::",
+ProgressNS(naive::AbstractFloat, interval::Real, workers::Vector{Integer}, dt::Real=0.1, desc::AbstractString="Nested Sampling::",
          color::Symbol=:green, output::IO=stderr, offset::Integer=0, start_it::Integer=1, eff_iterates=250) = 
             ProgressNS{typeof(interval)}(naive, interval, workers, dt=dt, eff_iterates=eff_iterates, desc=desc, color=color, output=output, offset=offset, start_it=start_it)
 
-ProgressNS(naive::Float64, interval::Real, workers::Vector{Int64}, desc::AbstractString, offset::Integer=0, start_it::Integer=1; eff_iterates=250, no_displayed_srcs=1) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates, no_displayed_srcs=no_displayed_srcs)
+ProgressNS(naive::AbstractFloat, interval::Real, workers::Vector{Integer}, desc::AbstractString, offset::Integer=0, start_it::Integer=1; eff_iterates=250, no_displayed_srcs=1) = ProgressNS{typeof(interval)}(naive, interval, workers, desc=desc, offset=offset, start_it=start_it, eff_iterates=eff_iterates, no_displayed_srcs=no_displayed_srcs)
 
 function update!(p::ProgressNS, contour, max, val, thresh, info, li_dist, worker, wk_time, job, model, old_li, new_li, instruction; sources=[(zeros(0,0),0)], bitmatrix=falses(0,0), options...)
     
@@ -248,9 +248,9 @@ end
                 end
 
                 function printsources(p; freqsort=true)
-                    printidxs=Vector{Int64}()
-                    printsrcs=Vector{Matrix{Float64}}()
-                    printfreqs=Vector{Float64}()
+                    printidxs=Vector{Integer}()
+                    printsrcs=Vector{Matrix{AbstractFloat}}()
+                    printfreqs=Vector{AbstractFloat}()
 
                     if freqsort
                         freqs=vec(sum(p.mix,dims=1)); total=size(p.mix,1)
