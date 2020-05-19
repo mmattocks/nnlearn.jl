@@ -2,8 +2,8 @@
 mutable struct ProgressNS{T<:Real} <: AbstractProgress
     interval::T
     dt::AbstractFloat
-    start_it::Int
-    counter::Int
+    start_it::Integer
+    counter::Integer
     triggered::Bool
     tfirst::AbstractFloat
     tlast::AbstractFloat
@@ -12,8 +12,8 @@ mutable struct ProgressNS{T<:Real} <: AbstractProgress
     desc::AbstractString # prefix to the percentage, e.g.  "Computing..."
     color::Symbol        # default to green
     output::IO           # output stream into which the progress is written
-    numprintedvalues::Int   # num values printed below progress in last iteration
-    offset::Int             # position offset of progress bar (default is 0)
+    numprintedvalues::Integer   # num values printed below progress in last iteration
+    offset::Integer             # position offset of progress bar (default is 0)
     total_step::AbstractFloat
     information::AbstractFloat
     etc::AbstractFloat
